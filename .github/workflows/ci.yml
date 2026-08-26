@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # Dijalankan PERTAMA dan berdiri sendiri: pelanggaran batas modul harus
+  # menggagalkan build lebih dulu, sebelum waktu terbuang pada uji lain.
+  # Ini pagar utama terhadap risiko RA-1 (batas modul luntur).
+  architecture:
+    name: Uji Arsitektur
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Pasang dependensi
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Tegakkan batas modul
+        run: composer test:arch
+
+  quality:
+    name: Kualitas Kode
+    runs-on: ubuntu-latest
+    needs: architecture
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Pasang dependensi
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Periksa format kode
+        run: vendor/bin/pint --test
+
+      - name: Analisis statis
+        run: composer analyse
+
+      - name: Audit kerentanan dependensi
+        run: composer audit
+
+  test:
+    name: Uji Otomatis
+    runs-on: ubuntu-latest
+    needs: architecture
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: hris_testing
+          POSTGRES_USER: hris_app
+          POSTGRES_PASSWORD: secret
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, redis, bcmath, intl
+          coverage: xdebug
+
+      - name: Pasang dependensi
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Jalankan migrasi
+        run: php artisan migrate --force
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: localhost
+          DB_DATABASE: hris_testing
+          DB_USERNAME: hris_app
+          DB_PASSWORD: secret
+
+      - name: Uji unit & feature
+        run: vendor/bin/phpunit --testsuite=Unit,Feature
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: localhost
+          DB_DATABASE: hris_testing
+          DB_USERNAME: hris_app
+          DB_PASSWORD: secret

@@ -1,0 +1,39 @@
+/* Titik masuk gaya aplikasi. Token dimuat lebih dulu agar variabel
+   tersedia bagi seluruh lapisan Tailwind. */
+@import './tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: var(--hris-font-utama);
+    background: var(--hris-latar);
+    color: var(--hris-teks);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Fokus keyboard harus selalu terlihat — syarat aksesibilitas dasar
+     dan relevan untuk audit kepatuhan. */
+  :focus-visible {
+    outline: 2px solid var(--hris-emas);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  /* Nominal rupiah, jam lembur, dan saldo cuti WAJIB memakai kelas ini
+     agar angka sejajar antar baris tabel. */
+  .angka {
+    font-family: var(--hris-font-angka);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}

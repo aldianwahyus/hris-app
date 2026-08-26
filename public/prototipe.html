@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prototipe HRIS — Bank NTB Syariah</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --hijau:#0A7A5C;
+  --hijau-tua:#064E3B;
+  --hijau-muda:#E6F2ED;
+  --emas:#C9A227;
+  --emas-muda:#FBF4DE;
+  --putih:#FFFFFF;
+  --latar:#F5F7F6;
+  --garis:#E2E8E5;
+  --teks:#0F1F1A;
+  --teks-lemah:#5C706A;
+  --merah:#B42318;
+  --merah-muda:#FEF3F2;
+  --r:10px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:'Plus Jakarta Sans',system-ui,sans-serif;
+  background:var(--latar);color:var(--teks);
+  -webkit-font-smoothing:antialiased;line-height:1.5;
+}
+.mono{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+
+/* ---------- kerangka halaman ---------- */
+.bingkai{max-width:1240px;margin:0 auto;padding:28px 20px 72px}
+.kepala{margin-bottom:24px}
+.kepala h1{font-size:20px;font-weight:800;letter-spacing:-.02em}
+.kepala p{font-size:13px;color:var(--teks-lemah);margin-top:4px}
+.pita{
+  display:inline-flex;align-items:center;gap:7px;background:var(--emas-muda);
+  border:1px solid #E8D9A0;color:#7A5F0B;padding:5px 11px;border-radius:99px;
+  font-size:11.5px;font-weight:600;margin-bottom:14px
+}
+.pita::before{content:"";width:5px;height:5px;border-radius:99px;background:var(--emas)}
+
+/* ---------- tab ---------- */
+.tab{display:flex;gap:4px;background:var(--putih);border:1px solid var(--garis);
+  border-radius:var(--r);padding:4px;margin-bottom:26px;overflow-x:auto}
+.tab button{
+  flex:1;min-width:132px;border:0;background:transparent;padding:9px 14px;
+  border-radius:7px;font-family:inherit;font-size:13px;font-weight:600;
+  color:var(--teks-lemah);cursor:pointer;white-space:nowrap;transition:.15s
+}
+.tab button:hover{background:var(--latar);color:var(--teks)}
+.tab button[aria-selected="true"]{background:var(--hijau);color:#fff}
+.tab button:focus-visible{outline:2px solid var(--emas);outline-offset:2px}
+
+.layar{display:none}
+.layar.aktif{display:block}
+
+/* ---------- bingkai ponsel ---------- */
+.panggung{display:flex;gap:34px;align-items:flex-start;flex-wrap:wrap}
+.ponsel{
+  width:352px;flex-shrink:0;background:var(--putih);border-radius:26px;
+  border:1px solid var(--garis);box-shadow:0 18px 48px -22px rgba(6,78,59,.34);
+  overflow:hidden
+}
+.ponsel-bar{
+  background:var(--hijau-tua);color:#fff;padding:9px 20px 7px;
+  display:flex;justify-content:space-between;font-size:11px;font-weight:600
+}
+.catatan{flex:1;min-width:270px;max-width:400px}
+.catatan h3{font-size:13px;font-weight:700;margin-bottom:10px;letter-spacing:-.01em}
+.catatan ul{list-style:none;display:flex;flex-direction:column;gap:11px}
+.catatan li{
+  font-size:12.5px;color:var(--teks-lemah);padding-left:15px;position:relative;line-height:1.65
+}
+.catatan li::before{
+  content:"";position:absolute;left:0;top:8px;width:5px;height:5px;
+  border-radius:99px;background:var(--emas)
+}
+.catatan strong{color:var(--teks);font-weight:600}
+
+/* ---------- header aplikasi ---------- */
+.app-atas{background:var(--hijau-tua);color:#fff;padding:16px 20px 26px}
+.app-atas .sapa{font-size:12px;opacity:.75}
+.app-atas .nama{font-size:16px;font-weight:700;margin-top:2px}
+.app-atas .jab{font-size:11.5px;opacity:.7;margin-top:3px}
+.avatar{
+  width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.14);
+  display:grid;place-items:center;font-weight:700;font-size:14px;
+  border:1px solid rgba(255,255,255,.2)
+}
+.baris{display:flex;justify-content:space-between;align-items:center}
+
+.isi{padding:0 16px 22px;margin-top:-14px}
+.kartu{
+  background:var(--putih);border:1px solid var(--garis);border-radius:var(--r);
+  padding:15px;margin-bottom:12px
+}
+.kartu-judul{
+  font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+  color:var(--teks-lemah);margin-bottom:12px
+}
+
+/* ---------- absensi ---------- */
+.absen{display:flex;gap:10px}
+.absen-sel{
+  flex:1;border:1px solid var(--garis);border-radius:9px;padding:11px;text-align:center
+}
+.absen-sel.hadir{background:var(--hijau-muda);border-color:#BFDED2}
+.absen-sel .lbl{font-size:10.5px;color:var(--teks-lemah);font-weight:600}
+.absen-sel .jam{font-size:19px;font-weight:700;margin-top:3px;letter-spacing:-.02em}
+.absen-sel .lok{font-size:10px;color:var(--teks-lemah);margin-top:2px}
+
+/* ---------- SIGNATURE: kantong saldo cuti ---------- */
+.kantong{display:flex;flex-direction:column;gap:13px}
+.kantong-item .atas{
+  display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px
+}
+.kantong-item .nm{font-size:12.5px;font-weight:600}
+.kantong-item .ket{font-size:10.5px;color:var(--teks-lemah);margin-top:1px}
+.kantong-item .ang{font-size:13px;font-weight:700}
+.kantong-item .ang span{font-size:11px;font-weight:500;color:var(--teks-lemah)}
+.rel{height:7px;background:var(--latar);border-radius:99px;overflow:hidden;display:flex}
+.rel i{display:block;height:100%}
+.rel i.pakai{background:var(--hijau)}
+.rel i.sisa{background:#CFE3DA}
+.rel.hangus i.pakai{background:#B9C4C0}
+.rel.hangus i.sisa{background:#E5EAE8}
+.tag{
+  display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:700;
+  padding:2px 7px;border-radius:99px;letter-spacing:.02em;margin-top:6px
+}
+.tag.bekal{background:var(--emas-muda);color:#7A5F0B;border:1px solid #E8D9A0}
+.tag.nol{background:var(--latar);color:var(--teks-lemah);border:1px solid var(--garis)}
+
+.info{
+  margin-top:13px;padding:11px 12px;background:var(--emas-muda);
+  border:1px solid #E8D9A0;border-radius:8px;font-size:11.5px;color:#6B540A;line-height:1.6
+}
+.info b{font-weight:700}
+
+/* ---------- daftar pengajuan ---------- */
+.ajuan{display:flex;flex-direction:column;gap:9px}
+.ajuan-item{
+  display:flex;gap:11px;align-items:flex-start;padding:11px;
+  border:1px solid var(--garis);border-radius:9px
+}
+.ikon{
+  width:32px;height:32px;border-radius:8px;display:grid;place-items:center;
+  font-size:13px;flex-shrink:0
+}
+.ikon.h{background:var(--hijau-muda)}
+.ikon.e{background:var(--emas-muda)}
+.ajuan-item .j{font-size:12.5px;font-weight:600}
+.ajuan-item .s{font-size:11px;color:var(--teks-lemah);margin-top:2px}
+.status{font-size:10px;font-weight:700;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.status.tunggu{background:var(--emas-muda);color:#7A5F0B}
+.status.setuju{background:var(--hijau-muda);color:var(--hijau-tua)}
+
+/* ---------- form ---------- */
+.medan{margin-bottom:14px}
+.medan label{display:block;font-size:11.5px;font-weight:600;margin-bottom:6px}
+.pilih{display:flex;flex-direction:column;gap:7px}
+.opsi{
+  display:flex;justify-content:space-between;align-items:center;padding:11px 12px;
+  border:1px solid var(--garis);border-radius:9px;cursor:pointer;transition:.12s
+}
+.opsi:hover{border-color:#BFDED2;background:#FAFCFB}
+.opsi.terpilih{border-color:var(--hijau);background:var(--hijau-muda)}
+.opsi .n{font-size:12.5px;font-weight:600}
+.opsi .d{font-size:10.5px;color:var(--teks-lemah);margin-top:2px}
+.radio{width:16px;height:16px;border:2px solid var(--garis);border-radius:99px;flex-shrink:0}
+.opsi.terpilih .radio{border-color:var(--hijau);border-width:5px}
+.kolom{
+  width:100%;padding:10px 12px;border:1px solid var(--garis);border-radius:8px;
+  font-family:inherit;font-size:13px;background:var(--putih);color:var(--teks)
+}
+.dua{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+.hitung{
+  background:var(--hijau-muda);border:1px solid #BFDED2;border-radius:9px;padding:13px
+}
+.hitung .br{display:flex;justify-content:space-between;font-size:12px;margin-bottom:7px}
+.hitung .br:last-child{margin-bottom:0;padding-top:8px;border-top:1px solid #BFDED2;font-weight:700}
+.hitung .lb{color:var(--teks-lemah)}
+
+.tombol{
+  width:100%;padding:13px;background:var(--hijau);color:#fff;border:0;border-radius:9px;
+  font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer;transition:.15s
+}
+.tombol:hover{background:var(--hijau-tua)}
+.tombol:focus-visible{outline:2px solid var(--emas);outline-offset:2px}
+
+/* ---------- web admin ---------- */
+.web{
+  background:var(--putih);border:1px solid var(--garis);border-radius:12px;
+  overflow:hidden;box-shadow:0 14px 40px -26px rgba(6,78,59,.3)
+}
+.web-atas{
+  background:var(--hijau-tua);color:#fff;padding:13px 22px;
+  display:flex;justify-content:space-between;align-items:center
+}
+.web-atas .kiri{display:flex;align-items:center;gap:13px}
+.logo{
+  width:30px;height:30px;border-radius:8px;background:var(--emas);color:var(--hijau-tua);
+  display:grid;place-items:center;font-weight:800;font-size:13px
+}
+.web-atas .jd{font-size:14px;font-weight:700}
+.web-atas .sb{font-size:11px;opacity:.7}
+.web-isi{padding:22px}
+.web-kepala{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;flex-wrap:wrap;gap:12px}
+.web-kepala h2{font-size:17px;font-weight:700;letter-spacing:-.02em}
+.web-kepala p{font-size:12.5px;color:var(--teks-lemah);margin-top:3px}
+
+.ringkas{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px;margin-bottom:20px}
+.ring{border:1px solid var(--garis);border-radius:10px;padding:14px}
+.ring.bahaya{border-color:#F3C6C2;background:var(--merah-muda)}
+.ring .a{font-size:26px;font-weight:800;letter-spacing:-.03em}
+.ring.bahaya .a{color:var(--merah)}
+.ring .l{font-size:11.5px;color:var(--teks-lemah);margin-top:3px;font-weight:500}
+
+table{width:100%;border-collapse:collapse}
+thead th{
+  text-align:left;font-size:10.5px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--teks-lemah);padding:9px 12px;
+  border-bottom:1px solid var(--garis);white-space:nowrap
+}
+tbody td{padding:12px;border-bottom:1px solid var(--garis);font-size:12.5px;vertical-align:middle}
+tbody tr:hover{background:#FAFCFB}
+.peg{font-weight:600}
+.peg small{display:block;font-weight:400;color:var(--teks-lemah);font-size:11px;margin-top:2px}
+.sisa-hari{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:12px}
+.titik{width:6px;height:6px;border-radius:99px;flex-shrink:0}
+.titik.aman{background:var(--hijau)}
+.titik.hati{background:var(--emas)}
+.titik.kritis{background:var(--merah)}
+.aksi{display:flex;gap:6px}
+.mini{
+  padding:6px 12px;border-radius:7px;font-family:inherit;font-size:11.5px;
+  font-weight:600;cursor:pointer;border:1px solid var(--garis);background:var(--putih);transition:.12s
+}
+.mini:hover{background:var(--latar)}
+.mini.utama{background:var(--hijau);color:#fff;border-color:var(--hijau)}
+.mini.utama:hover{background:var(--hijau-tua)}
+.mini:focus-visible{outline:2px solid var(--emas);outline-offset:1px}
+
+.peringatan{
+  display:flex;gap:11px;align-items:flex-start;background:var(--merah-muda);
+  border:1px solid #F3C6C2;border-radius:10px;padding:13px 15px;margin-bottom:18px
+}
+.peringatan .t{font-size:12.5px;font-weight:700;color:var(--merah)}
+.peringatan .d{font-size:12px;color:#7A2620;margin-top:3px;line-height:1.6}
+
+.gulir{overflow-x:auto}
+.kaki{
+  margin-top:34px;padding-top:20px;border-top:1px solid var(--garis);
+  font-size:11.5px;color:var(--teks-lemah);line-height:1.7
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media(max-width:720px){.ponsel{width:100%}.panggung{gap:22px}}
+</style>
+</head>
+<body>
+<div class="bingkai">
+
+  <div class="kepala">
+    <div class="pita">Prototipe tampilan · data contoh</div>
+    <h1>Enterprise HRIS — Bank NTB Syariah</h1>
+    <p>Tahap 7 · Prototipe UI/UX. Layar berikut menggambarkan alur yang akan dibangun, memakai aturan dari BPP Fasilitas Cuti dan SK Upah Kerja Lembur.</p>
+  </div>
+
+  <div class="tab" role="tablist">
+    <button role="tab" aria-selected="true" data-layar="beranda">Beranda Pegawai</button>
+    <button role="tab" aria-selected="false" data-layar="cuti">Pengajuan Cuti</button>
+    <button role="tab" aria-selected="false" data-layar="antrean">Antrean Persetujuan</button>
+  </div>
+
+  <!-- ============ 1. BERANDA PEGAWAI ============ -->
+  <section class="layar aktif" id="beranda">
+    <div class="panggung">
+      <div class="ponsel">
+        <div class="ponsel-bar"><span>08.14</span><span>WITA</span></div>
+
+        <div class="app-atas">
+          <div class="baris">
+            <div>
+              <div class="sapa">Assalamualaikum,</div>
+              <div class="nama">Siti Rahmawati</div>
+              <div class="jab">Officer · KC Mataram · PG 8</div>
+            </div>
+            <div class="avatar">SR</div>
+          </div>
+        </div>
+
+        <div class="isi">
+          <div class="kartu">
+            <div class="kartu-judul">Kehadiran hari ini</div>
+            <div class="absen">
+              <div class="absen-sel hadir">
+                <div class="lbl">Masuk</div>
+                <div class="jam mono">07.42</div>
+                <div class="lok">Dalam area kantor</div>
+              </div>
+              <div class="absen-sel">
+                <div class="lbl">Pulang</div>
+                <div class="jam mono">—</div>
+                <div class="lok">Belum dicatat</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SIGNATURE -->
+          <div class="kartu">
+            <div class="kartu-judul">Saldo cuti 2026</div>
+            <div class="kantong">
+
+              <div class="kantong-item">
+                <div class="atas">
+                  <div>
+                    <div class="nm">Jatah tahun berjalan</div>
+                    <div class="ket">Berlaku sampai 31 Desember 2026</div>
+                  </div>
+                  <div class="ang mono">9 <span>/ 12</span></div>
+                </div>
+                <div class="rel"><i class="pakai" style="width:25%"></i><i class="sisa" style="width:75%"></i></div>
+                <span class="tag bekal">Memberi hak bekal cuti</span>
+              </div>
+
+              <div class="kantong-item">
+                <div class="atas">
+                  <div>
+                    <div class="nm">Sisa tahun 2025</div>
+                    <div class="ket">Hangus setelah 31 Maret 2026</div>
+                  </div>
+                  <div class="ang mono">2 <span>/ 2</span></div>
+                </div>
+                <div class="rel"><i class="sisa" style="width:100%"></i></div>
+                <span class="tag nol">Tidak memberi hak bekal cuti</span>
+              </div>
+
+              <div class="kantong-item">
+                <div class="atas">
+                  <div>
+                    <div class="nm">Cuti besar</div>
+                    <div class="ket">Terbuka pada 2029 · masa kerja 6 tahun</div>
+                  </div>
+                  <div class="ang mono">—</div>
+                </div>
+                <div class="rel hangus"><i class="sisa" style="width:100%"></i></div>
+              </div>
+
+            </div>
+            <div class="info">
+              Bekal cuti dibayar <b>satu kali setiap tahun</b>, pada saat Anda mengambil jatah tahun berjalan untuk pertama kalinya. Memakai sisa cuti 2025 tidak memicu pembayaran.
+            </div>
+          </div>
+
+          <div class="kartu">
+            <div class="kartu-judul">Pengajuan saya</div>
+            <div class="ajuan">
+              <div class="ajuan-item">
+                <div class="ikon e">⏱</div>
+                <div style="flex:1">
+                  <div class="j">Lembur — 12 Agustus</div>
+                  <div class="s">3 jam · SPKL/2026/08/0412</div>
+                </div>
+                <span class="status tunggu">Menunggu</span>
+              </div>
+              <div class="ajuan-item">
+                <div class="ikon h">🌴</div>
+                <div style="flex:1">
+                  <div class="j">Cuti tahunan — 3 hari</div>
+                  <div class="s">18–20 Agustus 2026</div>
+                </div>
+                <span class="status setuju">Disetujui</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="catatan">
+        <h3>Alasan rancangan</h3>
+        <ul>
+          <li><strong>Saldo cuti ditampilkan sebagai tiga kantong terpisah</strong>, bukan satu angka. Ini cerminan langsung aturan BPP: hanya jatah tahun berjalan yang memberi hak bekal cuti, sementara sisa tahun lalu tidak.</li>
+          <li><strong>Setiap kantong menyebut tanggal hangusnya.</strong> Sisa 2025 hangus 31 Maret — informasi yang menentukan kapan pegawai sebaiknya mengambil cuti.</li>
+          <li><strong>Penanda "memberi hak bekal cuti"</strong> muncul di kantong yang tepat. Tanpa ini pegawai akan bertanya-tanya mengapa cuti tertentu tidak disertai pembayaran.</li>
+          <li><strong>Waktu ditulis dengan zona WITA.</strong> Bank beroperasi lintas zona waktu — KC Surabaya berada di WIB.</li>
+          <li>Cuti besar tetap ditampilkan meski belum terbuka, agar pegawai mengetahui haknya di masa depan.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 2. PENGAJUAN CUTI ============ -->
+  <section class="layar" id="cuti">
+    <div class="panggung">
+      <div class="ponsel">
+        <div class="ponsel-bar"><span>08.16</span><span>WITA</span></div>
+        <div class="app-atas" style="padding-bottom:20px">
+          <div class="baris">
+            <div><div class="nama" style="font-size:15px">Ajukan cuti</div></div>
+          </div>
+        </div>
+
+        <div class="isi">
+          <div class="kartu">
+            <div class="medan">
+              <label>Jenis cuti</label>
+              <div class="pilih">
+                <div class="opsi terpilih">
+                  <div>
+                    <div class="n">Cuti tahunan</div>
+                    <div class="d">Sisa 9 hari · memberi hak bekal cuti</div>
+                  </div>
+                  <div class="radio"></div>
+                </div>
+                <div class="opsi">
+                  <div>
+                    <div class="n">Cuti karena alasan penting</div>
+                    <div class="d">Pernikahan, keluarga wafat · kuota terpisah</div>
+                  </div>
+                  <div class="radio"></div>
+                </div>
+                <div class="opsi">
+                  <div>
+                    <div class="n">Cuti sakit</div>
+                    <div class="d">Perlu surat dokter bila lebih dari 1 hari</div>
+                  </div>
+                  <div class="radio"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="medan">
+              <label>Tanggal</label>
+              <div class="dua">
+                <input class="kolom mono" value="18/08/2026" readonly>
+                <input class="kolom mono" value="22/08/2026" readonly>
+              </div>
+            </div>
+
+            <div class="medan">
+              <label>Alasan</label>
+              <textarea class="kolom" rows="2" readonly>Keperluan keluarga di Sumbawa</textarea>
+            </div>
+          </div>
+
+          <div class="kartu">
+            <div class="kartu-judul">Rincian pengajuan</div>
+            <div class="hitung">
+              <div class="br"><span class="lb">Hari kerja diambil</span><span class="mono">5 hari</span></div>
+              <div class="br"><span class="lb">Sisa setelah disetujui</span><span class="mono">4 hari</span></div>
+              <div class="br"><span class="lb">Pengambilan pertama tahun ini</span><span class="mono">Ya</span></div>
+              <div class="br"><span>Bekal cuti</span><span class="mono">1 × gaji terakhir</span></div>
+            </div>
+            <div class="info">
+              Pengambilan pertama wajib <b>minimal 5 hari kerja berturut-turut</b>. Pengajuan Anda memenuhi ketentuan ini.
+            </div>
+          </div>
+
+          <div class="kartu">
+            <div class="kartu-judul">Alur persetujuan</div>
+            <div class="ajuan">
+              <div class="ajuan-item">
+                <div class="ikon h">1</div>
+                <div style="flex:1">
+                  <div class="j">Branch Manager KC Mataram</div>
+                  <div class="s">Ahmad Fauzi · pemutus cuti tahunan</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button class="tombol">Kirim pengajuan</button>
+        </div>
+      </div>
+
+      <div class="catatan">
+        <h3>Alasan rancangan</h3>
+        <ul>
+          <li><strong>Setiap jenis cuti menjelaskan konsekuensinya</strong> langsung di daftar pilihan — apakah memakai kuota tahunan dan apakah memberi hak bekal cuti. Pegawai memutuskan dengan informasi lengkap.</li>
+          <li><strong>Rincian dihitung sebelum dikirim.</strong> Sisa saldo dan nilai bekal cuti terlihat di muka, sehingga tidak ada kejutan setelah persetujuan.</li>
+          <li><strong>Aturan block leave 5 hari ditampilkan sebagai konfirmasi</strong>, bukan sebagai pesan kesalahan. Sistem memberi tahu ketentuan yang berlaku, bukan menghakimi setelah pegawai salah isi.</li>
+          <li><strong>Nama pemutus disebutkan.</strong> Kewenangan memutus bergantung pada jenis cuti dan lokasi kantor — pegawai perlu tahu siapa yang menunggu keputusannya.</li>
+          <li>Layar ini belum memuat unggah lampiran; itu muncul bila jenis cuti mensyaratkan bukti.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 3. ANTREAN PERSETUJUAN ============ -->
+  <section class="layar" id="antrean">
+    <div class="web">
+      <div class="web-atas">
+        <div class="kiri">
+          <div class="logo">NS</div>
+          <div>
+            <div class="jd">HRIS Bank NTB Syariah</div>
+            <div class="sb">Direktur Pembina · Wilayah Cabang</div>
+          </div>
+        </div>
+        <div style="font-size:12px;opacity:.85">Kamis, 13 Agustus 2026</div>
+      </div>
+
+      <div class="web-isi">
+        <div class="web-kepala">
+          <div>
+            <h2>Antrean persetujuan lembur</h2>
+            <p>Pengajuan dari seluruh kantor cabang dan cabang pembantu</p>
+          </div>
+          <button class="mini utama">Setujui terpilih (4)</button>
+        </div>
+
+        <div class="ringkas">
+          <div class="ring"><div class="a mono">37</div><div class="l">Menunggu keputusan</div></div>
+          <div class="ring bahaya"><div class="a mono">6</div><div class="l">Batas waktu ≤ 3 hari</div></div>
+          <div class="ring"><div class="a mono">142</div><div class="l">Jam lembur bulan ini</div></div>
+          <div class="ring"><div class="a mono">Rp4,1jt</div><div class="l">Nilai menunggu persetujuan</div></div>
+        </div>
+
+        <div class="peringatan">
+          <div style="font-size:16px">⚠</div>
+          <div>
+            <div class="t">6 pengajuan mendekati batas waktu</div>
+            <div class="d">Lembur yang belum disetujui dalam 30 hari sejak pelaksanaan tidak dapat dibayarkan. Pegawai berikut sudah bekerja dan menunggu keputusan.</div>
+          </div>
+        </div>
+
+        <div class="gulir">
+          <table>
+            <thead>
+              <tr>
+                <th>Pegawai</th><th>Kantor</th><th>Tanggal kerja</th><th>Jenis</th>
+                <th>Jam</th><th>Nilai</th><th>Batas waktu</th><th>Tindakan</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="peg">Budi Santoso<small>Teller · PG 6</small></td>
+                <td>KCP Praya</td>
+                <td class="mono">15 Jul 2026</td>
+                <td>Lembur biasa</td>
+                <td class="mono">4,0</td>
+                <td class="mono">Rp100.000</td>
+                <td><span class="sisa-hari"><span class="titik kritis"></span>2 hari</span></td>
+                <td><div class="aksi"><button class="mini utama">Setujui</button><button class="mini">Tolak</button></div></td>
+              </tr>
+              <tr>
+                <td class="peg">Dewi Lestari<small>Customer Service · PG 6</small></td>
+                <td>KC Selong</td>
+                <td class="mono">17 Jul 2026</td>
+                <td>Lembur biasa</td>
+                <td class="mono">3,0</td>
+                <td class="mono">Rp75.000</td>
+                <td><span class="sisa-hari"><span class="titik kritis"></span>3 hari</span></td>
+                <td><div class="aksi"><button class="mini utama">Setujui</button><button class="mini">Tolak</button></div></td>
+              </tr>
+              <tr>
+                <td class="peg">Ahmad Fauzi<small>Officer · PG 8</small></td>
+                <td>KC Mataram</td>
+                <td class="mono">02 Agu 2026</td>
+                <td>Crash program</td>
+                <td class="mono">1 hari</td>
+                <td class="mono">Rp250.000</td>
+                <td><span class="sisa-hari"><span class="titik hati"></span>11 hari</span></td>
+                <td><div class="aksi"><button class="mini utama">Setujui</button><button class="mini">Tolak</button></div></td>
+              </tr>
+              <tr>
+                <td class="peg">Rina Marlina<small>Asisten Administrasi · PG 5</small></td>
+                <td>KCP Gerung</td>
+                <td class="mono">05 Agu 2026</td>
+                <td>Lembur biasa</td>
+                <td class="mono">2,0</td>
+                <td class="mono">Rp50.000</td>
+                <td><span class="sisa-hari"><span class="titik aman"></span>17 hari</span></td>
+                <td><div class="aksi"><button class="mini utama">Setujui</button><button class="mini">Tolak</button></div></td>
+              </tr>
+              <tr>
+                <td class="peg">Hendra Wijaya<small>Satpam · PG 2</small></td>
+                <td>KC Mataram</td>
+                <td class="mono">08 Agu 2026</td>
+                <td>Lembur biasa</td>
+                <td class="mono">3,0</td>
+                <td class="mono">Rp60.000</td>
+                <td><span class="sisa-hari"><span class="titik aman"></span>20 hari</span></td>
+                <td><div class="aksi"><button class="mini utama">Setujui</button><button class="mini">Tolak</button></div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="catatan" style="max-width:none;margin-top:24px">
+      <h3>Alasan rancangan</h3>
+      <ul style="display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px 30px">
+        <li><strong>Kolom batas waktu adalah inti layar ini.</strong> Persetujuan lembur terpusat pada satu pejabat untuk seluruh cabang, sementara keterlambatan menghanguskan hak bayar pegawai. Tanpa penanda ini, kelalaian administratif berujung pegawai tidak dibayar atas pekerjaan yang sudah dilakukan.</li>
+        <li><strong>Peringatan menjelaskan taruhannya</strong>, bukan sekadar "6 item mendesak". Kalimatnya menyebut bahwa pegawai sudah bekerja — itu yang mendorong tindakan.</li>
+        <li><strong>Nilai rupiah ditampilkan per baris.</strong> Pemutus melihat konsekuensi finansial sebelum menyetujui.</li>
+        <li><strong>Tarif mengikuti kelas jabatan.</strong> Officer Rp30.000, Asisten Administrasi Rp25.000, Non Admin Rp20.000 — terlihat langsung dari nilai tiap baris.</li>
+        <li><strong>Angka memakai huruf monospasi</strong> agar jam dan rupiah mudah dibandingkan sejajar antar baris.</li>
+        <li><strong>Persetujuan massal tersedia</strong>, karena satu pejabat menangani puluhan cabang. Tanpa itu, antrean menjadi hambatan operasional.</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="kaki">
+    <strong>Prototipe tampilan — bukan sistem berjalan.</strong> Seluruh data pada layar ini adalah contoh. Aturan yang tercermin berasal dari BPP Fasilitas Cuti (BPP/1087/03/64/2026) dan SK Upah Kerja Lembur (KEP/1827/06/64/2026).<br>
+    Dokumen rujukan: RA-001 v0.22 · ARCH-001 v1.0 · DB-001 v1.0 · <span style="color:var(--merah)">CONFIDENTIAL — milik PT Bank NTB Syariah</span>
+  </div>
+</div>
+
+<script>
+const tombolTab = document.querySelectorAll('.tab button');
+const layar = document.querySelectorAll('.layar');
+
+tombolTab.forEach(b => b.addEventListener('click', () => {
+  tombolTab.forEach(x => x.setAttribute('aria-selected', 'false'));
+  b.setAttribute('aria-selected', 'true');
+  layar.forEach(s => s.classList.toggle('aktif', s.id === b.dataset.layar));
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}));
+
+// Pilihan jenis cuti dapat dicoba
+document.querySelectorAll('.opsi').forEach(o => o.addEventListener('click', () => {
+  o.parentElement.querySelectorAll('.opsi').forEach(x => x.classList.remove('terpilih'));
+  o.classList.add('terpilih');
+}));
+</script>
+</body>
+</html>

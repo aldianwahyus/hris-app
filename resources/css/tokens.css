@@ -1,0 +1,78 @@
+/**
+ * Token desain HRIS Bank NTB Syariah.
+ *
+ * Nilai di sini diambil dari prototipe UI (Tahap 7) dan menjadi SATU-SATUNYA
+ * sumber warna serta tipografi untuk seluruh antarmuka. Komponen tidak boleh
+ * menulis nilai heksadesimal langsung — selalu rujuk variabel di berkas ini.
+ *
+ * Alasannya sama seperti parameter kebijakan disimpan sebagai data: identitas
+ * visual bank dapat berubah, dan mengubahnya harus cukup di satu tempat.
+ *
+ * Palet mengikuti Project Constitution: hijau syariah, hijau tua, aksen emas,
+ * latar putih.
+ */
+
+:root {
+  /* Warna inti */
+  --hris-hijau: #0A7A5C;
+  --hris-hijau-tua: #064E3B;
+  --hris-hijau-muda: #E6F2ED;
+  --hris-emas: #C9A227;
+  --hris-emas-muda: #FBF4DE;
+
+  /* Permukaan */
+  --hris-putih: #FFFFFF;
+  --hris-latar: #F5F7F6;
+  --hris-garis: #E2E8E5;
+
+  /* Teks */
+  --hris-teks: #0F1F1A;
+  --hris-teks-lemah: #5C706A;
+
+  /* Status */
+  --hris-bahaya: #B42318;
+  --hris-bahaya-muda: #FEF3F2;
+  --hris-peringatan: #B54708;
+  --hris-berhasil: var(--hris-hijau);
+
+  /* Tipografi */
+  --hris-font-utama: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  /* Huruf monospasi WAJIB untuk nominal rupiah, jam lembur, dan saldo cuti.
+     Angka harus sejajar antar baris agar mudah dibandingkan pada tabel. */
+  --hris-font-angka: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Bentuk */
+  --hris-radius: 10px;
+  --hris-radius-kecil: 8px;
+  --hris-radius-besar: 12px;
+}
+
+/* Mode gelap — disyaratkan Project Constitution.
+   Hijau dinaikkan kecerahannya agar kontras tetap memenuhi WCAG AA
+   di atas latar gelap. */
+@media (prefers-color-scheme: dark) {
+  :root[data-tema="auto"],
+  :root[data-tema="gelap"] {
+    --hris-hijau: #34A383;
+    --hris-hijau-tua: #0A7A5C;
+    --hris-hijau-muda: #10322A;
+    --hris-emas: #E0BC4A;
+    --hris-emas-muda: #33290C;
+
+    --hris-putih: #10201B;
+    --hris-latar: #0A1613;
+    --hris-garis: #1E3A32;
+
+    --hris-teks: #E8F0EC;
+    --hris-teks-lemah: #93A9A2;
+
+    --hris-bahaya: #F97066;
+    --hris-bahaya-muda: #2C1512;
+  }
+}
+
+/* Kelas bantu untuk angka — dipakai pada nominal, jam, dan saldo. */
+.angka {
+  font-family: var(--hris-font-angka);
+  font-variant-numeric: tabular-nums;
+}

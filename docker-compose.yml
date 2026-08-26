@@ -1,0 +1,130 @@
+# Lingkungan pengembangan lokal.
+# Produksi menggunakan topologi berbeda sesuai ARCH-001 §3 (zonasi DMZ/App/Data).
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: hris_app
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      APP_ENV: local
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: hris
+      DB_USERNAME: hris_app
+      DB_PASSWORD: secret
+      REDIS_HOST: redis
+      AWS_ENDPOINT: http://minio:9000
+    networks: [hris]
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: hris_nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - .:/var/www/html
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on: [app]
+    networks: [hris]
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: hris_postgres
+    environment:
+      POSTGRES_DB: hris
+      POSTGRES_USER: hris_app
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hris_app -d hris"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [hris]
+
+  redis:
+    image: redis:7-alpine
+    container_name: hris_redis
+    # Queue absensi TIDAK boleh hilang (ARCH-001 §7.1) → persistence wajib
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
+    networks: [hris]
+
+  minio:
+    image: minio/minio:latest
+    container_name: hris_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+    networks: [hris]
+
+  # Worker terpisah dari App: lonjakan absensi pagi diproses asinkron
+  # tanpa mengganggu responsivitas API (ARCH-001 §7.1).
+  horizon:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: hris_horizon
+    command: php artisan horizon
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_ENV: local
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: hris
+      DB_USERNAME: hris_app
+      DB_PASSWORD: secret
+      REDIS_HOST: redis
+    networks: [hris]
+
+  # Tooling Node/Expo untuk mobile/ — Node tidak tersedia di image PHP
+  # (docker/php/Dockerfile), jadi service idle terpisah ini dipakai
+  # lewat `docker compose exec node npm ...` / `npx expo ...`, mengikuti
+  # pola yang sama dengan `docker compose exec app php artisan ...`.
+  node:
+    image: node:20-alpine
+    container_name: hris_node
+    working_dir: /app
+    volumes:
+      - ./mobile:/app
+    ports:
+      - "8081:8081" # Metro bundler
+      - "19000:19000" # Expo dev server (manifest)
+      - "19001:19001"
+      - "19002:19002" # Expo DevTools
+    command: tail -f /dev/null
+    networks: [hris]
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+
+networks:
+  hris:
+    driver: bridge

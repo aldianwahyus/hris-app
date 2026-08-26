@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "HCIS Mobile",
+    "slug": "hcis-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "HCIS Mobile memakai lokasi Anda untuk mencatat absensi kehadiran di kantor."
+        }
+      ],
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "HCIS Mobile memakai galeri Anda untuk melampirkan bukti pengajuan izin (mis. foto surat dokter).",
+          "cameraPermission": "HCIS Mobile memakai kamera Anda untuk memotret bukti pengajuan izin (mis. surat dokter)."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#064E3B",
+          "image": "./assets/splash-logo.png",
+          "imageWidth": 240,
+          "resizeMode": "contain"
+        }
+      ],
+      "expo-font"
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 8
+    paths:
+        - app
+    excludePaths:
+        - app/Interfaces/Http/Kernel.php (?)
+
+    # Lapisan Domain harus murni — tidak boleh menyentuh framework.
+    # Ini pelengkap ModuleBoundaryTest, bukan pengganti.
+    ignoreErrors: []
+
+    treatPhpDocTypesAsCertain: false
