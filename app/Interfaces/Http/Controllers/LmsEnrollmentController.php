@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Interfaces\Http\Controllers;
 
+use App\Modules\Lms\Application\CancelEnrollment;
 use App\Modules\Lms\Application\ComputeLearningPathProgress;
 use App\Modules\Lms\Application\EnrollInCourseBatch;
 use App\Modules\Lms\Application\RecommendCoursesForGap;
 use App\Modules\Lms\Application\SubmitTrainingEvaluation;
 use App\Shared\Audit\Domain\AuditActor;
 use Barryvdh\DomPDF\Facade\Pdf;
+use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -30,7 +32,32 @@ final class LmsEnrollmentController extends Controller
         private readonly RecommendCoursesForGap $recommend,
         private readonly ComputeLearningPathProgress $pathProgress,
         private readonly SubmitTrainingEvaluation $submitEvaluation,
+        private readonly CancelEnrollment $cancel,
     ) {}
+
+    public function cancelEnrollment(Request $request, string $id): RedirectResponse
+    {
+        $user = $request->user();
+
+        abort_if($user === null || $user->employee_id === null, 403, 'Akun ini belum ditautkan ke data pegawai.');
+
+        try {
+            $this->cancel->handle(
+                enrollmentId: $id,
+                employeeId: $user->employee_id,
+                actor: new AuditActor(
+                    actorId: $user->employee_id,
+                    actorRole: implode(',', $user->getRoleNames()->all()),
+                    ipAddress: $request->ip(),
+                    userAgent: $request->userAgent(),
+                ),
+            );
+        } catch (DomainException $e) {
+            return back()->with('gagal', $e->getMessage());
+        }
+
+        return back()->with('sukses', 'Pendaftaran pelatihan berhasil dibatalkan.');
+    }
 
     public function developmentPlan(Request $request): View
     {
@@ -161,7 +188,7 @@ final class LmsEnrollmentController extends Controller
             ->join('lms_courses as c', 'c.id', '=', 'b.course_id')
             ->where('en.employee_id', $user->employee_id)
             ->select(
-                'en.id', 'en.enrollment_number', 'en.status', 'en.completion_status',
+                'en.id', 'en.enrollment_number', 'en.status', 'en.completion_status', 'en.decision_note',
                 'en.score', 'en.certificate_number', 'en.requested_at',
                 'c.title as course_title', 'b.batch_code', 'b.start_date', 'b.end_date', 'b.id as batch_id',
             )

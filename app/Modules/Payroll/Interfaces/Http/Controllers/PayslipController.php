@@ -30,7 +30,22 @@ final class PayslipController
             ->orderByDesc('r.period')
             ->get();
 
-        return view('payroll.payslip', compact('slips'));
+        $slipIds = $slips->pluck('id');
+
+        // Potongan/tambahan ad-hoc TIDAK PERNAH memutasi take_home_partial_cents
+        // (lihat komentar di download()) — tanpa baris ini, THP yang tampil
+        // di sini akan berbeda dari angka pada PDF unduhan untuk slip yang sama.
+        $deductionsByPayslip = DB::table('pay_payslip_deductions')
+            ->whereIn('payslip_id', $slipIds)
+            ->get()
+            ->groupBy('payslip_id');
+
+        $additionsByPayslip = DB::table('pay_payslip_additions')
+            ->whereIn('payslip_id', $slipIds)
+            ->get()
+            ->groupBy('payslip_id');
+
+        return view('payroll.payslip', compact('slips', 'deductionsByPayslip', 'additionsByPayslip'));
     }
 
     /**

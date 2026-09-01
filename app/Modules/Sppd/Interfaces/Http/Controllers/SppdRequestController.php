@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Sppd\Interfaces\Http\Controllers;
 
+use App\Modules\Sppd\Application\CancelSppdRequest;
 use App\Modules\Sppd\Application\SubmitSppdRequest;
 use App\Modules\Sppd\Domain\JabatanTier;
 use App\Modules\Sppd\Domain\JabatanTierNotMapped;
@@ -16,6 +17,7 @@ use App\Modules\Sppd\Interfaces\Http\Requests\SubmitSppdRequestForm;
 use App\Shared\Audit\Domain\AuditActor;
 use App\Shared\Temporal\Domain\AsOfDate;
 use DateTimeImmutable;
+use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,7 +29,47 @@ final class SppdRequestController
     public function __construct(
         private readonly SubmitSppdRequest $submit,
         private readonly SppdBudgetCalculator $calculator,
+        private readonly CancelSppdRequest $cancel,
     ) {}
+
+    /** Riwayat SPPD Saya — SEMUA pengajuan milik pegawai yang login. Belum pernah ada halaman riwayat sama sekali sebelum ini. */
+    public function history(Request $request): View
+    {
+        $user = $request->user();
+
+        abort_if($user === null || $user->employee_id === null, 403, 'Akun ini belum ditautkan ke data pegawai.');
+
+        $requests = DB::table('spd_requests')
+            ->where('employee_id', $user->employee_id)
+            ->orderByDesc('created_at')
+            ->paginate(20);
+
+        return view('sppd.history', compact('requests'));
+    }
+
+    public function cancelRequest(Request $request, string $id): RedirectResponse
+    {
+        $user = $request->user();
+
+        abort_if($user === null || $user->employee_id === null, 403, 'Akun ini belum ditautkan ke data pegawai.');
+
+        try {
+            $this->cancel->handle(
+                sppdRequestId: $id,
+                employeeId: $user->employee_id,
+                actor: new AuditActor(
+                    actorId: $user->employee_id,
+                    actorRole: implode(',', $user->getRoleNames()->all()),
+                    ipAddress: $request->ip(),
+                    userAgent: $request->userAgent(),
+                ),
+            );
+        } catch (DomainException $e) {
+            return back()->with('gagal', $e->getMessage());
+        }
+
+        return back()->with('sukses', 'Pengajuan SPPD berhasil dibatalkan.');
+    }
 
     /**
      * Pratinjau anggaran (jika kategori+tanggal sudah dipilih) dihitung

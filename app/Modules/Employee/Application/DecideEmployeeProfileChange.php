@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Employee\Application;
 
+use App\Core\Domain\Uuid7;
 use App\Modules\Employee\Domain\ProfileChangeConflict;
 use App\Modules\Employee\Domain\ProfileChangeValidator;
 use App\Shared\Audit\Domain\AuditAction;
@@ -39,6 +40,7 @@ final class DecideEmployeeProfileChange
 
             $proposedChanges = json_decode($request->proposed_changes, true);
 
+            /** @var object{office_id: string, position_id: string, person_grade: ?int, job_grade: ?int, version: int}|null $employee */
             $employee = DB::table('emp_employees')->where('id', $request->employee_id)->first();
 
             if ($employee === null) {
@@ -69,6 +71,8 @@ final class DecideEmployeeProfileChange
                 throw ProfileChangeConflict::forEmployee($request->employee_id);
             }
 
+            $this->recordPositionHistoryIfChanged($request->employee_id, $employee, $proposedChanges, $requestId, $now);
+
             DB::table('emp_profile_change_requests')->where('id', $requestId)->update([
                 'status' => 'approved',
                 'decided_by' => $actor->actorId,
@@ -88,6 +92,46 @@ final class DecideEmployeeProfileChange
                 contextRef: $requestId,
             ));
         });
+    }
+
+    /**
+     * Merekam SNAPSHOT lengkap posisi (bukan hanya field yang berubah)
+     * ke emp_position_history — dasar laporan "Record Pegawai" —
+     * HANYA bila salah satu dari office_id/position_id/person_grade/
+     * job_grade benar-benar termasuk perubahan yang baru disetujui.
+     * $employee di sini adalah nilai SEBELUM UPDATE (di-fetch di awal
+     * approve()) — digabung dengan $proposedChanges supaya baris
+     * riwayat berisi keadaan LENGKAP SETELAH perubahan, bukan cuma
+     * delta-nya (laporan per-bulan butuh baris utuh untuk diambil
+     * langsung, tanpa perlu menggabungkan beberapa baris riwayat).
+     *
+     * @param  object{office_id: string, position_id: string, person_grade: ?int, job_grade: ?int}  $employee
+     * @param  array<string, mixed>  $proposedChanges
+     */
+    private function recordPositionHistoryIfChanged(string $employeeId, object $employee, array $proposedChanges, string $requestId, DateTimeImmutable $now): void
+    {
+        $positionFields = ['office_id', 'position_id', 'person_grade', 'job_grade'];
+
+        if (array_intersect(array_keys($proposedChanges), $positionFields) === []) {
+            return;
+        }
+
+        $decisionLetterId = DB::table('emp_decision_letters')
+            ->where('profile_change_request_id', $requestId)
+            ->value('id');
+
+        DB::table('emp_position_history')->insert([
+            'id' => (string) Uuid7::generate(),
+            'employee_id' => $employeeId,
+            'office_id' => $proposedChanges['office_id'] ?? $employee->office_id,
+            'position_id' => $proposedChanges['position_id'] ?? $employee->position_id,
+            'person_grade' => $proposedChanges['person_grade'] ?? $employee->person_grade,
+            'job_grade' => $proposedChanges['job_grade'] ?? $employee->job_grade,
+            'effective_from' => $now->format('Y-m-d'),
+            'decision_letter_id' => $decisionLetterId,
+            'created_at' => $now,
+            'version' => 1,
+        ]);
     }
 
     public function reject(string $requestId, AuditActor $actor, ?string $note = null): void

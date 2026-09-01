@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient, apiErrorMessage } from '../api/client';
 import { IzinRequestRow, ListResponse } from '../api/types';
@@ -37,6 +38,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: 'success' | 'warning'
   pending: { label: 'Menunggu', tone: 'warning' },
   approved: { label: 'Disetujui', tone: 'success' },
   rejected: { label: 'Ditolak', tone: 'danger' },
+  cancelled: { label: 'Dibatalkan', tone: 'neutral' },
 };
 
 interface Attachment {
@@ -44,6 +46,12 @@ interface Attachment {
   name: string;
   mimeType: string;
 }
+
+// Format & ukuran SAMA PERSIS validasi backend (SubmitIzinRequestForm::rules()
+// — mimes:jpg,jpeg,png,pdf, max:5120 KB) supaya penolakan tidak baru
+// diketahui pengguna setelah kirim ke server.
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+const MAX_ATTACHMENT_LABEL = 'JPG, PNG, atau PDF — maks 5 MB';
 
 export function IzinScreen() {
   const navigation = useNavigation();
@@ -83,6 +91,23 @@ export function IzinScreen() {
     }
   }
 
+  function confirmCancel(item: IzinRequestRow) {
+    Alert.alert('Batalkan Pengajuan', `Batalkan pengajuan izin ${item.request_number}?`, [
+      { text: 'Tidak', style: 'cancel' },
+      { text: 'Ya, Batalkan', style: 'destructive', onPress: () => cancelRequest(item.id) },
+    ]);
+  }
+
+  async function cancelRequest(id: string) {
+    try {
+      await apiClient.post(`/izin/${id}/batal`);
+      showSuccess('Pengajuan izin berhasil dibatalkan.');
+      load();
+    } catch (error) {
+      showError(apiErrorMessage(error, 'Pengajuan tidak dapat dibatalkan.'));
+    }
+  }
+
   async function pickAttachment() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -96,14 +121,46 @@ export function IzinScreen() {
       quality: 0.6,
     });
 
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      setAttachment({
-        uri: asset.uri,
-        name: asset.fileName ?? `lampiran-${Date.now()}.jpg`,
-        mimeType: asset.mimeType ?? 'image/jpeg',
-      });
+    if (result.canceled || !result.assets[0]) {
+      return;
     }
+
+    const asset = result.assets[0];
+
+    if (asset.fileSize && asset.fileSize > MAX_ATTACHMENT_BYTES) {
+      showError(`Ukuran gambar melebihi 5 MB (${MAX_ATTACHMENT_LABEL}).`);
+      return;
+    }
+
+    setAttachment({
+      uri: asset.uri,
+      name: asset.fileName ?? `lampiran-${Date.now()}.jpg`,
+      mimeType: asset.mimeType ?? 'image/jpeg',
+    });
+  }
+
+  async function pickDocument() {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: 'application/pdf',
+      copyToCacheDirectory: true,
+    });
+
+    if (result.canceled || !result.assets[0]) {
+      return;
+    }
+
+    const asset = result.assets[0];
+
+    if (asset.size && asset.size > MAX_ATTACHMENT_BYTES) {
+      showError(`Ukuran berkas melebihi 5 MB (${MAX_ATTACHMENT_LABEL}).`);
+      return;
+    }
+
+    setAttachment({
+      uri: asset.uri,
+      name: asset.name,
+      mimeType: asset.mimeType ?? 'application/pdf',
+    });
   }
 
   function resetForm() {
@@ -204,6 +261,14 @@ export function IzinScreen() {
                   <Text style={styles.attachedText}>Lampiran terpasang</Text>
                 </View>
               )}
+              {item.status === 'rejected' && item.decision_note ? (
+                <Text style={styles.decisionNote}>Alasan penolakan: {item.decision_note}</Text>
+              ) : null}
+              {item.status === 'pending' ? (
+                <TouchableOpacity onPress={() => confirmCancel(item)} style={styles.cancelBtn}>
+                  <Text style={styles.cancelBtnText}>Batalkan</Text>
+                </TouchableOpacity>
+              ) : null}
             </Card>
           );
         }}
@@ -230,9 +295,16 @@ export function IzinScreen() {
         <TextField label="Alasan" value={reason} onChangeText={setReason} placeholder="mis. Demam, istirahat di rumah" multiline />
 
         <Text style={styles.label}>Lampiran Bukti{category === 'sakit' ? ' (wajib)' : ' (opsional)'}</Text>
+        <Text style={styles.formatHint}>{MAX_ATTACHMENT_LABEL}</Text>
         {attachment ? (
           <View style={styles.attachmentPreview}>
-            <Image source={{ uri: attachment.uri }} style={styles.previewImage} />
+            {attachment.mimeType === 'application/pdf' ? (
+              <View style={styles.previewPdfIcon}>
+                <Ionicons name="document-text" size={22} color={colors.primary} />
+              </View>
+            ) : (
+              <Image source={{ uri: attachment.uri }} style={styles.previewImage} />
+            )}
             <View style={{ flex: 1 }}>
               <Text style={styles.previewName} numberOfLines={1}>{attachment.name}</Text>
               <TouchableOpacity onPress={() => setAttachment(null)}>
@@ -241,10 +313,16 @@ export function IzinScreen() {
             </View>
           </View>
         ) : (
-          <TouchableOpacity style={styles.pickButton} onPress={pickAttachment}>
-            <Ionicons name="image-outline" size={18} color={colors.primary} />
-            <Text style={styles.pickButtonText}>Pilih dari Galeri</Text>
-          </TouchableOpacity>
+          <View style={styles.pickRow}>
+            <TouchableOpacity style={[styles.pickButton, { flex: 1 }]} onPress={pickAttachment}>
+              <Ionicons name="image-outline" size={18} color={colors.primary} />
+              <Text style={styles.pickButtonText}>Galeri</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.pickButton, { flex: 1 }]} onPress={pickDocument}>
+              <Ionicons name="document-outline" size={18} color={colors.primary} />
+              <Text style={styles.pickButtonText}>Dokumen PDF</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         <PrimaryButton label="Kirim Pengajuan" onPress={handleSubmit} loading={isSubmitting} style={{ marginTop: spacing.lg }} />
@@ -291,6 +369,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   pickButtonText: { color: colors.primary, fontWeight: '700', fontSize: 13 },
+  pickRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  formatHint: { ...type.tiny, marginBottom: spacing.sm, marginTop: -2 },
   attachmentPreview: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -302,6 +382,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   previewImage: { width: 44, height: 44, borderRadius: radius.sm },
+  previewPdfIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   previewName: { fontSize: 12, color: colors.text, fontWeight: '600' },
   removeText: { fontSize: 11.5, color: colors.danger, fontWeight: '700', marginTop: 2 },
+  decisionNote: { fontSize: 12.5, color: colors.danger, marginTop: spacing.xs },
+  cancelBtn: { alignSelf: 'flex-start', marginTop: spacing.sm },
+  cancelBtnText: { fontSize: 12.5, fontWeight: '700', color: colors.danger },
 });

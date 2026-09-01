@@ -6,8 +6,13 @@ namespace Tests\Feature\Izin;
 
 use App\Core\Domain\Uuid7;
 use App\Models\User;
+use App\Modules\Izin\Application\CancelIzinRequest;
+use App\Notifications\RequestDecided;
+use App\Shared\Audit\Domain\AuditActor;
+use DomainException;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 /**
@@ -64,8 +69,77 @@ final class IzinApprovalQueueTest extends TestCase
         $response->assertRedirect(route('admin.izin-queue'));
 
         $row = DB::table('izin_requests')->where('id', $requestId)->first();
+        $this->assertNotNull($row);
         $this->assertSame('rejected', $row->status);
         $this->assertSame($ahmadId, $row->approver_id);
+    }
+
+    /**
+     * Celah ditemukan lewat evaluasi PM/client (2026-08-27) — pola SAMA
+     * PERSIS LeaveApprovalQueueScopeTest. Izin SATU tahap: setiap
+     * keputusan (setuju maupun tolak) selalu final, jadi notifikasi
+     * SELALU terkirim (tidak ada tahap transisi).
+     */
+    public function test_penolakan_menyimpan_alasan_dan_mengirim_notifikasi_ke_pemohon(): void
+    {
+        Notification::fake();
+
+        $requestId = $this->insertIzinRequest($this->employeeId('2018.03.0142'));
+
+        $response = $this->actingAs($this->userWithNrp('2015.07.0088'))
+            ->post("/persetujuan/izin/{$requestId}/tolak", ['catatan' => 'Sudah ada pengganti shift, tidak perlu izin.']);
+
+        $response->assertRedirect(route('admin.izin-queue'));
+
+        $row = DB::table('izin_requests')->where('id', $requestId)->first();
+        $this->assertNotNull($row);
+        $this->assertSame('Sudah ada pengganti shift, tidak perlu izin.', $row->decision_note);
+
+        Notification::assertSentTo(
+            $this->userWithNrp('2018.03.0142'),
+            fn (RequestDecided $n) => $n->approved === false && $n->reason === 'Sudah ada pengganti shift, tidak perlu izin.',
+        );
+    }
+
+    public function test_setuju_mengirim_notifikasi_ke_pemohon(): void
+    {
+        Notification::fake();
+
+        $requestId = $this->insertIzinRequest($this->employeeId('2018.03.0142'));
+
+        $this->actingAs($this->userWithNrp('2015.07.0088'))
+            ->post("/persetujuan/izin/{$requestId}/setujui");
+
+        Notification::assertSentTo(
+            $this->userWithNrp('2018.03.0142'),
+            fn (RequestDecided $n) => $n->approved === true,
+        );
+    }
+
+    public function test_batal_saat_pending_berhasil(): void
+    {
+        $employeeId = $this->employeeId('2018.03.0142');
+        $requestId = $this->insertIzinRequest($employeeId);
+
+        $response = $this->actingAs($this->userWithNrp('2018.03.0142'))
+            ->post("/izin/{$requestId}/batal");
+
+        $response->assertRedirect();
+        $this->assertSame('cancelled', DB::table('izin_requests')->where('id', $requestId)->value('status'));
+    }
+
+    public function test_batal_gagal_setelah_diputus(): void
+    {
+        $requestId = $this->insertIzinRequest($this->employeeId('2018.03.0142'));
+        DB::table('izin_requests')->where('id', $requestId)->update(['status' => 'approved']);
+
+        $this->expectException(DomainException::class);
+
+        app(CancelIzinRequest::class)->handle(
+            izinRequestId: $requestId,
+            employeeId: $this->employeeId('2018.03.0142'),
+            actor: new AuditActor(actorId: $this->employeeId('2018.03.0142'), actorRole: 'pegawai'),
+        );
     }
 
     public function test_pengajuan_yang_sudah_diputus_tidak_bisa_diputus_dua_kali(): void

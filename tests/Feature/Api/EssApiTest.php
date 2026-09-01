@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
+use App\Core\Domain\Uuid7;
 use App\Models\User;
+use App\Modules\Payroll\Application\DecidePayrollRun;
+use App\Modules\Payroll\Application\RunPayrollDraft;
 use App\Notifications\ApprovalSlaReminder;
+use App\Shared\Audit\Domain\AuditActor;
 use DateTimeImmutable;
+use DateTimeZone;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -58,6 +63,36 @@ final class EssApiTest extends TestCase
         $response->assertJsonStructure(['data']);
     }
 
+    /** Sisa cuti = jumlah SEMUA kantong (tahun berjalan + bawaan) yang belum terpakai — reuse LeaveBucket::remaining(). */
+    public function test_sisa_cuti_muncul_di_respons_dan_dihitung_benar(): void
+    {
+        $employeeId = $this->employeeId(self::NRP);
+        $year = (int) now()->format('Y');
+
+        DB::table('leave_balances')->where('employee_id', $employeeId)->where('year', $year)->delete();
+        DB::table('leave_balances')->insert([
+            [
+                'id' => (string) Uuid7::generate(), 'employee_id' => $employeeId, 'year' => $year,
+                'bucket_type' => 'current_year', 'quota_days' => 12, 'used_days' => 4,
+                'expires_on' => "{$year}-12-31", 'triggers_allowance' => true, 'consumption_order' => 1,
+                'created_at' => now(), 'updated_at' => now(), 'version' => 1,
+            ],
+            [
+                'id' => (string) Uuid7::generate(), 'employee_id' => $employeeId, 'year' => $year,
+                'bucket_type' => 'carry_forward', 'quota_days' => 3, 'used_days' => 1,
+                'expires_on' => "{$year}-03-31", 'triggers_allowance' => false, 'consumption_order' => 2,
+                'created_at' => now(), 'updated_at' => now(), 'version' => 1,
+            ],
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token()}")->getJson('/api/v1/cuti');
+
+        $response->assertOk();
+        $response->assertJsonStructure(['data', 'sisa_cuti']);
+        // (12-4) + (3-1) = 10 — JSON tanpa pecahan diserialisasi sebagai integer, bukan 10.0.
+        $response->assertJsonPath('sisa_cuti', 10);
+    }
+
     public function test_lembur_tanpa_bukti_absensi_ditolak_sebagai_json_422(): void
     {
         $response = $this->withHeader('Authorization', "Bearer {$this->token()}")->postJson('/api/v1/lembur', [
@@ -103,6 +138,45 @@ final class EssApiTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonStructure(['data']);
+    }
+
+    /**
+     * Regresi (bug ditemukan lewat audit kode, konsisten dengan
+     * perbaikan PayslipController::index() versi web): endpoint ini
+     * sebelumnya HANYA mengembalikan take_home_partial_cents mentah,
+     * tanpa deductions/additions ad-hoc — aplikasi mobile menampilkan
+     * THP yang berbeda (lebih besar, salah) dari web/PDF untuk slip yang
+     * sama. Sekarang take_home_cents WAJIB sudah memperhitungkan
+     * keduanya, dan baris deductions/additions ikut disertakan.
+     */
+    public function test_slip_gaji_api_menyertakan_thp_yang_benar_setelah_potongan_ad_hoc(): void
+    {
+        $employeeId = DB::table('emp_employees')->where('nrp', self::NRP)->value('id');
+
+        $runId = app(RunPayrollDraft::class)->handle(
+            officeId: DB::table('emp_employees')->where('id', $employeeId)->value('office_id'),
+            period: new DateTimeImmutable('2026-09-01'),
+            actor: new AuditActor(actorId: $this->employeeId('2021.05.0302'), actorRole: 'hr_admin'),
+        );
+        app(DecidePayrollRun::class)->approve($runId, new AuditActor(actorId: $this->employeeId('2014.02.0061'), actorRole: 'hr_approver'));
+
+        $slipId = DB::table('pay_payslips')->where('employee_id', $employeeId)->value('id');
+        $now = now();
+        DB::table('pay_payslip_deductions')->insert([
+            'id' => (string) Uuid7::generate(), 'payslip_id' => $slipId, 'deduction_type' => 'kasbon_pinjaman',
+            'amount_cents' => 300_000_00, 'note' => null, 'created_by' => $this->employeeId('2021.05.0302'),
+            'created_at' => $now, 'updated_at' => $now, 'version' => 1,
+        ]);
+
+        $takeHomePartial = (int) DB::table('pay_payslips')->where('id', $slipId)->value('take_home_partial_cents');
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token()}")->getJson('/api/v1/slip-gaji');
+
+        $response->assertOk();
+        $slip = collect($response->json('data'))->firstWhere('id', $slipId);
+        $this->assertNotNull($slip);
+        $this->assertSame($takeHomePartial - 300_000_00, $slip['take_home_cents']);
+        $this->assertCount(1, $slip['deductions']);
     }
 
     public function test_notifikasi_dapat_didaftar_lewat_api(): void
@@ -214,7 +288,7 @@ final class EssApiTest extends TestCase
     {
         $response = $this->withHeader('Authorization', "Bearer {$this->token()}")->postJson('/api/v1/izin', [
             'category' => 'keperluan_keluarga',
-            'start_date' => (new DateTimeImmutable('today'))->format('Y-m-d'),
+            'start_date' => $this->officeToday(),
             'end_date' => (new DateTimeImmutable('+2 days'))->format('Y-m-d'),
             'reason' => 'Uji API',
         ]);
@@ -227,8 +301,8 @@ final class EssApiTest extends TestCase
     {
         $response = $this->withHeader('Authorization', "Bearer {$this->token()}")->postJson('/api/v1/izin', [
             'category' => 'sakit',
-            'start_date' => (new DateTimeImmutable('today'))->format('Y-m-d'),
-            'end_date' => (new DateTimeImmutable('today'))->format('Y-m-d'),
+            'start_date' => $this->officeToday(),
+            'end_date' => $this->officeToday(),
             'reason' => 'Demam',
         ]);
 
@@ -241,14 +315,46 @@ final class EssApiTest extends TestCase
 
         $response = $this->withHeader('Authorization', "Bearer {$this->token()}")->post('/api/v1/izin', [
             'category' => 'sakit',
-            'start_date' => (new DateTimeImmutable('today'))->format('Y-m-d'),
-            'end_date' => (new DateTimeImmutable('today'))->format('Y-m-d'),
+            'start_date' => $this->officeToday(),
+            'end_date' => $this->officeToday(),
             'reason' => 'Demam',
             'attachment' => UploadedFile::fake()->image('surat-dokter.jpg'),
         ], ['Accept' => 'application/json']);
 
         $response->assertCreated();
         $response->assertJsonStructure(['request_number']);
+    }
+
+    public function test_izin_lampiran_format_tidak_didukung_ditolak_dengan_pesan_indonesia(): void
+    {
+        Storage::fake('s3');
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token()}")->post('/api/v1/izin', [
+            'category' => 'sakit',
+            'start_date' => $this->officeToday(),
+            'end_date' => $this->officeToday(),
+            'reason' => 'Demam',
+            'attachment' => UploadedFile::fake()->create('surat-dokter.docx', 100, 'application/msword'),
+        ], ['Accept' => 'application/json']);
+
+        $response->assertUnprocessable();
+        $response->assertJsonFragment(['attachment' => ['Lampiran bukti hanya boleh berformat JPG, PNG, atau PDF.']]);
+    }
+
+    public function test_izin_lampiran_melebihi_5mb_ditolak_dengan_pesan_indonesia(): void
+    {
+        Storage::fake('s3');
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token()}")->post('/api/v1/izin', [
+            'category' => 'sakit',
+            'start_date' => $this->officeToday(),
+            'end_date' => $this->officeToday(),
+            'reason' => 'Demam',
+            'attachment' => UploadedFile::fake()->create('surat-dokter.pdf', 5121, 'application/pdf'),
+        ], ['Accept' => 'application/json']);
+
+        $response->assertUnprocessable();
+        $response->assertJsonFragment(['attachment' => ['Ukuran lampiran bukti maksimal 5 MB.']]);
     }
 
     public function test_daftar_izin_terbatas_pada_milik_sendiri(): void
@@ -268,6 +374,23 @@ final class EssApiTest extends TestCase
         $this->getJson('/api/v1/slip-gaji')->assertUnauthorized();
         $this->getJson('/api/v1/notifikasi')->assertUnauthorized();
         $this->getJson('/api/v1/izin')->assertUnauthorized();
+        $this->getJson('/api/v1/menu-mobile')->assertUnauthorized();
+    }
+
+    /**
+     * Menu Aplikasi Mobile — dikendalikan SYSADMIN/Admin HC lewat
+     * MobileMenuSettingsController (web). Bawaan SEMUA menyala (lihat
+     * migrasi create_mobile_menu_items), sesuai apa yang klien mobile
+     * benar-benar konsumsi (MobileMenuContext.tsx): {key: boolean}.
+     */
+    public function test_menu_mobile_mencerminkan_saklar_admin(): void
+    {
+        DB::table('mobile_menu_items')->where('key', 'sppd')->update(['is_enabled' => false]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token()}")->getJson('/api/v1/menu-mobile');
+
+        $response->assertOk();
+        $response->assertJson(['data' => ['sppd' => false, 'cuti' => true]]);
     }
 
     private function token(): string
@@ -276,5 +399,31 @@ final class EssApiTest extends TestCase
             'nrp' => self::NRP,
             'password' => self::PASSWORD,
         ])->json('token');
+    }
+
+    private function employeeId(string $nrp): string
+    {
+        return DB::table('emp_employees')->where('nrp', $nrp)->value('id');
+    }
+
+    /**
+     * Bug ditemukan lewat evaluasi PM/client (2026-09-01): SubmitIzinRequest
+     * membandingkan tanggal terhadap "hari ini" pada ZONA WAKTU KANTOR
+     * pegawai (Asia/Makassar, UTC+8) — bukan zona waktu default PHP/UTC.
+     * `new DateTimeImmutable('today')` polos di sini rapuh terhadap JAM
+     * (bukan cuma tanggal): saat UTC malam, Makassar sudah masuk hari
+     * berikutnya, jadi "today" versi UTC bisa SATU HARI DI BELAKANG
+     * "hari ini" versi kantor — pengajuan Izin ditolak 422 padahal
+     * seharusnya lolos. Dihitung eksplisit pada zona waktu kantor Siti
+     * (NRP konstan di file ini) supaya tidak lagi tergantung jam jalan.
+     */
+    private function officeToday(): string
+    {
+        $timezone = DB::table('emp_employees as e')
+            ->join('md_offices as o', 'o.id', '=', 'e.office_id')
+            ->where('e.nrp', self::NRP)
+            ->value('o.timezone') ?? 'Asia/Makassar';
+
+        return (new DateTimeImmutable('today', new DateTimeZone($timezone)))->format('Y-m-d');
     }
 }

@@ -154,6 +154,47 @@ final class PayslipDownloadTest extends TestCase
     }
 
     /**
+     * Regresi (bug ditemukan lewat audit kode): PayslipController::index()
+     * (halaman ESS "Slip Gaji") sebelumnya HANYA menampilkan
+     * take_home_partial_cents mentah, tanpa pernah menyentuh
+     * pay_payslip_deductions/pay_payslip_additions — berbeda dari
+     * download() (PDF) yang benar menghitung THP dari kombinasi
+     * keduanya. Pegawai melihat DUA angka THP berbeda untuk satu slip
+     * yang sama: satu di halaman web (lebih besar, mengabaikan potongan
+     * ad-hoc), satu di PDF (benar). Sekarang keduanya WAJIB sama.
+     */
+    public function test_halaman_ess_menampilkan_thp_yang_sama_dengan_pdf_setelah_potongan_ad_hoc(): void
+    {
+        $siti = $this->userWithNrp('2018.03.0142');
+
+        $runId = app(RunPayrollDraft::class)->handle(
+            officeId: $siti->employee->office_id,
+            period: new DateTimeImmutable('2026-09-01'),
+            actor: new AuditActor(actorId: $this->employeeId('2021.05.0302'), actorRole: 'hr_admin'),
+        );
+        app(DecidePayrollRun::class)->approve($runId, new AuditActor(actorId: $this->employeeId('2014.02.0061'), actorRole: 'hr_approver'));
+
+        $slipId = DB::table('pay_payslips')->where('employee_id', $siti->employee_id)->value('id');
+        $hrAdminId = $this->employeeId('2021.05.0302');
+        $now = now();
+
+        DB::table('pay_payslip_deductions')->insert([
+            'id' => (string) Uuid7::generate(), 'payslip_id' => $slipId, 'deduction_type' => 'kasbon_pinjaman',
+            'amount_cents' => 300_000_00, 'note' => null, 'created_by' => $hrAdminId, 'created_at' => $now, 'updated_at' => $now, 'version' => 1,
+        ]);
+
+        $takeHomePartial = (int) DB::table('pay_payslips')->where('id', $slipId)->value('take_home_partial_cents');
+        $expectedThp = $takeHomePartial - 300_000_00;
+
+        $response = $this->actingAs($siti)->get('/slip-gaji');
+
+        $response->assertOk();
+        $response->assertSeeText('Kasbon/Pinjaman');
+        $response->assertSeeText('Rp'.number_format($expectedThp / 100, 0, ',', '.'));
+        $response->assertDontSeeText('Sebagian (belum lengkap)');
+    }
+
+    /**
      * SEC-2026-08-TJ: Tunjangan Jabatan/Penyesuaian pada data induk
      * pegawai ikut tersalin ke payslip saat generate DAN menambah
      * take_home_partial_cents (bukan hanya tersimpan tanpa berpengaruh).

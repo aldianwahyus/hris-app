@@ -9,6 +9,7 @@ use App\Shared\Audit\Domain\AuditActor;
 use App\Shared\Audit\Domain\AuditEntry;
 use App\Shared\Audit\Domain\AuditRepository;
 use App\Shared\Workflow\Contracts\WorkflowInstanceRepository;
+use App\Shared\Workflow\Domain\InstanceStatus;
 use App\Shared\Workflow\Domain\SlaWindow;
 use DateTimeImmutable;
 use Illuminate\Support\Facades\DB;
@@ -34,6 +35,25 @@ final class ProcessWorkflowSla
     private const AUDITABLE_TYPES = [
         'leave_request' => 'leave_request',
         'overtime_request' => 'ovt_request',
+        'izin_request' => 'izin_request',
+        'shift_swap_request' => 'shift_swap_request',
+    ];
+
+    /**
+     * Peta document_type → [nama tabel, status yang berarti "masih
+     * menunggu keputusan"]. Dipakai untuk mendeteksi baris wf_instance_steps
+     * yang BASI — sudah diputus lewat jalur approval modul bisnis masing-
+     * masing (yang menulis LANGSUNG ke kolom status tabel ini, TIDAK PERNAH
+     * memanggil WorkflowInstance::decide()/save()) tapi belum tercermin di
+     * sini karena Workflow Engine tidak pernah diberi tahu keputusannya.
+     *
+     * @var array<string, array{0: string, 1: array<int, string>}>
+     */
+    private const DOCUMENT_STATUS_TABLES = [
+        'leave_request' => ['leave_requests', ['pending', 'pending_pimpinan']],
+        'overtime_request' => ['ovt_requests', ['pending', 'pending_pimpinan']],
+        'izin_request' => ['izin_requests', ['pending']],
+        'shift_swap_request' => ['shf_swap_requests', ['pending']],
     ];
 
     public function __construct(
@@ -65,6 +85,23 @@ final class ProcessWorkflowSla
 
             if ($requestNumber === null) {
                 continue; // data tidak konsisten — jangan proses lebih lanjut
+            }
+
+            if (! $this->documentStillPending($row->document_type, $row->document_id)) {
+                // Sudah diputus lewat antrean persetujuan modul bisnis
+                // (leave_requests/ovt_requests/izin_requests/
+                // shf_swap_requests.status) — baris Workflow Engine ini
+                // basi, BUKAN benar-benar terlambat. Rekonsiliasi diam-diam
+                // TANPA efek samping SLA (tidak melepas saldo cuti/kuota
+                // lembur yang sudah benar ditangani jalur keputusan asli,
+                // tidak ada entri audit "Expired" palsu pada pengajuan yang
+                // sebenarnya sudah disetujui/ditolak) — bug ditemukan lewat
+                // audit kode: WorkflowInstance::decide() tidak pernah
+                // dipanggil di mana pun, jadi wf_instances/wf_instance_steps
+                // tidak pernah tahu keputusan sungguhan sudah terjadi.
+                $this->reconcileAlreadyDecided($row);
+
+                continue;
             }
 
             $window = new SlaWindow(
@@ -150,8 +187,49 @@ final class ProcessWorkflowSla
         return match ($documentType) {
             'leave_request' => DB::table('leave_requests')->where('id', $documentId)->value('request_number'),
             'overtime_request' => DB::table('ovt_requests')->where('id', $documentId)->value('spkl_number'),
+            'izin_request' => DB::table('izin_requests')->where('id', $documentId)->value('request_number'),
+            'shift_swap_request' => DB::table('shf_swap_requests')->where('id', $documentId)->value('request_number'),
             default => null,
         };
+    }
+
+    /** Apakah dokumen bisnis masih dalam status "menunggu keputusan" — lihat DOCUMENT_STATUS_TABLES. */
+    private function documentStillPending(string $documentType, string $documentId): bool
+    {
+        if (! isset(self::DOCUMENT_STATUS_TABLES[$documentType])) {
+            return true; // tipe tak dikenal — requestNumberFor() sudah menyaring ini lebih dulu, tidak pernah sampai sini
+        }
+
+        [$table, $pendingStatuses] = self::DOCUMENT_STATUS_TABLES[$documentType];
+
+        $status = DB::table($table)->where('id', $documentId)->value('status');
+
+        return in_array($status, $pendingStatuses, true);
+    }
+
+    /**
+     * Menutup baris wf_instances/wf_instance_steps yang basi — dokumen
+     * bisnisnya SUDAH diputus lewat jalurnya sendiri, jadi ini BUKAN
+     * kedaluwarsa SLA sungguhan. Update mentah langsung (bukan lewat
+     * WorkflowInstance::expire()) SENGAJA: tidak ada peristiwa domain yang
+     * benar terjadi di sini untuk direkam, hanya menyamakan bukukan supaya
+     * baris ini berhenti muncul di sapuan berikutnya.
+     */
+    private function reconcileAlreadyDecided(stdClass $row): void
+    {
+        $now = new DateTimeImmutable;
+
+        DB::table('wf_instance_steps')->where('id', $row->instance_step_id)->update([
+            'status' => InstanceStatus::Cancelled->value,
+            'completed_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        DB::table('wf_instances')->where('id', $row->instance_id)->update([
+            'status' => InstanceStatus::Cancelled->value,
+            'completed_at' => $now,
+            'updated_at' => $now,
+        ]);
     }
 
     private function markDocumentExpired(string $documentType, string $documentId): void
@@ -159,6 +237,8 @@ final class ProcessWorkflowSla
         $table = match ($documentType) {
             'leave_request' => 'leave_requests',
             'overtime_request' => 'ovt_requests',
+            'izin_request' => 'izin_requests',
+            'shift_swap_request' => 'shf_swap_requests',
             default => null,
         };
 
@@ -166,12 +246,13 @@ final class ProcessWorkflowSla
             return;
         }
 
-        // 'pending_pimpinan' HANYA berlaku untuk overtime_request (tahap 2
-        // Lembur, lihat ApprovalQueueController) — disertakan di sini agar
+        // 'pending_pimpinan' HANYA berlaku untuk overtime_request/
+        // leave_request (tahap 2, lihat ApprovalQueueController/
+        // LeaveApprovalQueueController) — disertakan di sini agar
         // pengajuan yang sudah lolos Atasan Langsung tapi mandek di
         // Pimpinan Kantor TETAP bisa kedaluwarsa (RA-3), bukan terkunci
-        // pending_pimpinan selamanya. Tidak berdampak ke leave_requests
-        // (status itu tidak pernah muncul di sana).
+        // pending_pimpinan selamanya. Tidak berdampak ke izin_requests/
+        // shf_swap_requests (status itu tidak pernah muncul di sana).
         DB::table($table)->where('id', $documentId)->whereIn('status', ['pending', 'pending_pimpinan'])->update([
             'status' => 'expired',
             'updated_at' => now(),
@@ -218,23 +299,31 @@ final class ProcessWorkflowSla
      */
     private function releaseLeaveBalance(string $leaveRequestId): void
     {
-        $request = DB::table('leave_requests')->where('id', $leaveRequestId)->first();
+        // Transaksi + lockForUpdate — TANPA ini, sapuan SLA yang berjalan
+        // bersamaan dengan reject manual (LeaveApprovalQueueController)
+        // bisa sama-sama membaca bucket_debits non-null sebelum salah satu
+        // menuliskan null, lalu keduanya mendekremen used_days: saldo cuti
+        // pegawai dikembalikan DUA KALI untuk satu pengajuan yang sama
+        // (bug ditemukan lewat audit kode).
+        DB::transaction(function () use ($leaveRequestId) {
+            $request = DB::table('leave_requests')->where('id', $leaveRequestId)->lockForUpdate()->first();
 
-        if ($request === null || $request->bucket_debits === null) {
-            return;
-        }
+            if ($request === null || $request->bucket_debits === null) {
+                return;
+            }
 
-        $year = (int) date('Y', strtotime((string) $request->start_date));
-        $debits = json_decode((string) $request->bucket_debits, true) ?? [];
+            $year = (int) (new DateTimeImmutable((string) $request->start_date))->format('Y');
+            $debits = json_decode((string) $request->bucket_debits, true) ?? [];
 
-        foreach ($debits as $debit) {
-            DB::table('leave_balances')
-                ->where('employee_id', $request->employee_id)
-                ->where('year', $year)
-                ->where('bucket_type', $debit['bucket_type'])
-                ->decrement('used_days', (float) $debit['days']);
-        }
+            foreach ($debits as $debit) {
+                DB::table('leave_balances')
+                    ->where('employee_id', $request->employee_id)
+                    ->where('year', $year)
+                    ->where('bucket_type', $debit['bucket_type'])
+                    ->decrement('used_days', (float) $debit['days']);
+            }
 
-        DB::table('leave_requests')->where('id', $leaveRequestId)->update(['bucket_debits' => null]);
+            DB::table('leave_requests')->where('id', $leaveRequestId)->update(['bucket_debits' => null]);
+        });
     }
 }

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Interfaces\Http\Controllers\Api\V1\MobileMenuApiController;
 use App\Interfaces\Http\Controllers\Api\V1\NotificationApiController;
 use App\Modules\Access\Interfaces\Http\Controllers\Api\V1\TokenController;
 use App\Modules\Attendance\Interfaces\Http\Controllers\Api\V1\AttendanceApiController;
@@ -37,22 +38,32 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/cuti', [LeaveApiController::class, 'index']);
         Route::post('/cuti', [LeaveApiController::class, 'store']);
+        // Batal HANYA saat status='pending' (sebelum tahap 1 diputus) —
+        // ditegakkan di CancelLeaveRequest, cermin leave.cancel web.
+        Route::post('/cuti/{id}/batal', [LeaveApiController::class, 'cancel']);
 
         Route::get('/lembur', [OvertimeApiController::class, 'index']);
         Route::post('/lembur', [OvertimeApiController::class, 'store']);
+        Route::post('/lembur/{id}/batal', [OvertimeApiController::class, 'cancel']);
 
         Route::get('/sppd', [SppdApiController::class, 'index']);
         Route::post('/sppd', [SppdApiController::class, 'store']);
+        Route::post('/sppd/{id}/batal', [SppdApiController::class, 'cancel']);
 
         Route::get('/absensi', [AttendanceApiController::class, 'index']);
         Route::post('/absensi', [AttendanceApiController::class, 'store']);
 
         Route::get('/izin', [IzinApiController::class, 'index']);
         Route::post('/izin', [IzinApiController::class, 'store']);
+        Route::post('/izin/{id}/batal', [IzinApiController::class, 'cancel']);
 
         Route::get('/slip-gaji', [PayslipApiController::class, 'index']);
 
         Route::get('/notifikasi', [NotificationApiController::class, 'index']);
         Route::post('/notifikasi/{id}/baca', [NotificationApiController::class, 'markAsRead']);
+
+        // Menu Aplikasi Mobile yang boleh tampil — dikendalikan SYSADMIN/
+        // Admin HC lewat MobileMenuSettingsController (web).
+        Route::get('/menu-mobile', [MobileMenuApiController::class, 'index']);
     });
 });

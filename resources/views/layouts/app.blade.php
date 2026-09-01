@@ -80,6 +80,25 @@ a{color:inherit;text-decoration:none}
 .atas-halaman .jd{font-size:15px;font-weight:700}
 .atas-halaman .sb{font-size:11.5px;color:var(--teks-lemah);margin-top:1px}
 
+.lonceng{position:relative}
+.lonceng > summary{list-style:none;cursor:pointer;width:38px;height:38px;border-radius:99px;
+  background:var(--latar);display:flex;align-items:center;justify-content:center;font-size:16px;
+  border:1px solid var(--garis)}
+.lonceng > summary::-webkit-details-marker{display:none}
+.lonceng-lencana{position:absolute;top:-3px;right:-3px;background:var(--merah);color:#fff;
+  font-size:9.5px;font-weight:700;border-radius:99px;min-width:16px;height:16px;padding:0 4px;
+  display:flex;align-items:center;justify-content:center;line-height:1}
+.lonceng-panel{position:absolute;right:0;top:46px;width:320px;max-width:calc(100vw - 32px);
+  background:var(--putih);border:1px solid var(--garis);border-radius:var(--r);
+  box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:50;max-height:400px;overflow-y:auto}
+.lonceng-item{padding:11px 14px;border-bottom:1px solid var(--garis);font-size:12px;line-height:1.5}
+.lonceng-item:last-child{border-bottom:0}
+.lonceng-item.belum-dibaca{background:var(--hijau-muda)}
+.lonceng-item .waktu{font-size:10px;color:var(--teks-lemah);margin-top:3px}
+.lonceng-kosong{padding:20px 14px;text-align:center;color:var(--teks-lemah);font-size:12px}
+.lonceng-kaki{padding:9px 14px;text-align:center;border-top:1px solid var(--garis)}
+.lonceng-kaki a{font-size:11.5px;font-weight:600}
+
 .wadah{max-width:1180px;margin:0 auto;padding:22px 18px 60px}
 .kartu{background:var(--putih);border:1px solid var(--garis);border-radius:var(--r);padding:16px;margin-bottom:13px}
 .kartu-judul{font-size:11px;font-weight:700;text-transform:uppercase;
@@ -94,6 +113,7 @@ a{color:inherit;text-decoration:none}
 .btn:hover{background:var(--hijau-tua)}
 .btn.luar{background:var(--putih);color:var(--teks);border-color:var(--garis)}
 .btn.luar:hover{background:var(--latar)}
+.btn.kecil{padding:6px 12px;font-size:11.5px}
 
 .bidang{margin-bottom:16px}
 .bidang label{display:block;font-size:12px;font-weight:600;color:var(--teks-lemah);margin-bottom:6px}
@@ -148,7 +168,7 @@ a{color:inherit;text-decoration:none}
     <label for="sisi-toggle" class="sisi-toggle-tombol" aria-label="Buka/tutup menu">☰</label>
     <div class="merek">
       <div class="plat-logo">
-        <img src="{{ asset('images/logo_ntbs-BSIF94NC.png') }}" alt="Bank NTB Syariah">
+        <img src="{{ asset('images/logo_ntbs-EC94901A.png') }}" alt="Bank NTB Syariah">
       </div>
       <div>
         <div class="jd">HCIS</div>
@@ -167,41 +187,208 @@ a{color:inherit;text-decoration:none}
       <nav>
         @if ($bukanAdminSistem)
           <details class="grup" open>
-            <summary class="label">Pegawai</summary>
+            <summary class="label">Beranda</summary>
             <a href="{{ route('ess.dashboard') }}" class="{{ request()->routeIs('ess.dashboard') ? 'aktif' : '' }}">
               <span class="ic">⌂</span> Beranda
-            </a>
-            <a href="{{ route('ess.cv') }}" class="{{ $cocok('ess.cv*') }}">
-              <span class="ic">☰</span> CV Saya
-            </a>
-            <a href="{{ route('leave.create') }}" class="{{ $cocok('leave.*') }}">
-              <span class="ic">▤</span> Ajukan Cuti
-            </a>
-            <a href="{{ route('overtime.create') }}" class="{{ $cocok('overtime.*') }}">
-              <span class="ic">◷</span> Ajukan Lembur
-            </a>
-            <a href="{{ route('attendance.create') }}" class="{{ $cocok('attendance.create') }}">
-              <span class="ic">◉</span> Absensi
-            </a>
-            <a href="{{ route('attendance.outside.create') }}" class="{{ $cocok('attendance.outside.*') }}">
-              <span class="ic">⌖</span> Ajukan Absen Luar Kantor
-            </a>
-            <a href="{{ route('payslip.index') }}" class="{{ $cocok('payslip.*') }}">
-              <span class="ic">§</span> Slip Gaji
-            </a>
-            <a href="{{ route('sppd.create') }}" class="{{ $cocok('sppd.*') }}">
-              <span class="ic">✈</span> Ajukan SPPD
-            </a>
-            <a href="{{ route('shift.create') }}" class="{{ $cocok('shift.*') }}">
-              <span class="ic">⇄</span> Ajukan Tukar Shift
-            </a>
-            <a href="{{ route('izin.create') }}" class="{{ $cocok('izin.*') }}">
-              <span class="ic">✉</span> Ajukan Izin
             </a>
           </details>
         @endif
 
-        @if ($bukanAdminSistem || $u->hasAnyRole(['hr_admin', 'hr_approver', 'system_admin']))
+        @if ($bukanAdminSistem || $u->hasAnyPermission(['outside-attendance-approval.view', 'attendance-recap.view']))
+          <details class="grup" open>
+            <summary class="label">Absensi</summary>
+            @if ($bukanAdminSistem)
+              <a href="{{ route('attendance.create') }}" class="{{ $cocok('attendance.create') }}">
+                <span class="ic">◉</span> Absensi
+              </a>
+              <a href="{{ route('attendance.outside.create') }}" class="{{ $cocok('attendance.outside.*') }}">
+                <span class="ic">⌖</span> Ajukan Absen Luar Kantor
+              </a>
+            @endif
+            @can('outside-attendance-approval.view')
+              <a href="{{ route('admin.outside-attendance-queue') }}" class="{{ $cocok('admin.outside-attendance-queue') }}">
+                <span class="ic">✓</span> Antrean Absen Luar Kantor
+                @isset($badgeCounts['admin.outside-attendance-queue'])<span class="lencana">{{ $badgeCounts['admin.outside-attendance-queue'] }}</span>@endisset
+              </a>
+            @endcan
+            @can('attendance-recap.view')
+              <a href="{{ route('hr.attendance-recap') }}" class="{{ $cocok('hr.attendance-recap') }}">
+                <span class="ic">◉</span> Rekap Absensi
+              </a>
+            @endcan
+          </details>
+        @endif
+
+        @if ($bukanAdminSistem || $u->hasAnyPermission(['leave-approval.view', 'bekal-cuti-disbursement.hc']) || $u->hasRole('hr_admin'))
+          <details class="grup" open>
+            <summary class="label">Cuti</summary>
+            @if ($bukanAdminSistem)
+              <a href="{{ route('leave.create') }}" class="{{ $cocok('leave.*') }}">
+                <span class="ic">▤</span> Ajukan Cuti
+              </a>
+            @endif
+            @can('leave-approval.view')
+              <a href="{{ route('admin.leave-approval-queue') }}" class="{{ $cocok('admin.leave-approval-queue') }}">
+                <span class="ic">✓</span> Antrean Cuti
+                @isset($badgeCounts['admin.leave-approval-queue'])<span class="lencana">{{ $badgeCounts['admin.leave-approval-queue'] }}</span>@endisset
+              </a>
+            @endcan
+            @role('hr_admin')
+              <a href="{{ route('hr.bekal-cuti.index') }}" class="{{ $cocok('hr.bekal-cuti.*') }}">
+                <span class="ic">$</span> Pencairan Bekal Cuti
+                @isset($badgeCounts['hr.bekal-cuti.index'])<span class="lencana">{{ $badgeCounts['hr.bekal-cuti.index'] }}</span>@endisset
+              </a>
+            @endrole
+            @can('bekal-cuti-disbursement.hc')
+              <a href="{{ route('admin.bekal-cuti-queue') }}" class="{{ $cocok('admin.bekal-cuti-queue') }}">
+                <span class="ic">$</span> Pencairan Bekal Cuti (Bank-wide)
+                @isset($badgeCounts['admin.bekal-cuti-queue'])<span class="lencana">{{ $badgeCounts['admin.bekal-cuti-queue'] }}</span>@endisset
+              </a>
+            @endcan
+          </details>
+        @endif
+
+        @if ($bukanAdminSistem || $u->hasAnyPermission(['overtime-approval.view', 'overtime-disbursement.hc', 'hc-dashboard.view', 'bekal-cuti-disbursement.hc']) || $u->hasRole('hr_admin'))
+          <details class="grup" open>
+            <summary class="label">Lembur</summary>
+            @if ($bukanAdminSistem)
+              <a href="{{ route('overtime.create') }}" class="{{ $cocok('overtime.*') }}">
+                <span class="ic">◷</span> Ajukan Lembur
+              </a>
+            @endif
+            @can('overtime-approval.view')
+              <a href="{{ route('admin.approval-queue') }}" class="{{ $cocok('admin.approval-queue') }}">
+                <span class="ic">✓</span> Antrean Lembur
+                @isset($badgeCounts['admin.approval-queue'])<span class="lencana">{{ $badgeCounts['admin.approval-queue'] }}</span>@endisset
+              </a>
+            @endcan
+            @if ($u->hasRole('hr_admin') || $u->hasAnyPermission(['hc-dashboard.view', 'overtime-disbursement.hc', 'bekal-cuti-disbursement.hc']))
+              <a href="{{ route('hr.overtime-recap') }}" class="{{ $cocok('hr.overtime-recap') }}">
+                <span class="ic">Σ</span> Rekap Biaya Lembur
+              </a>
+            @endif
+            @role('hr_admin')
+              <a href="{{ route('hr.overtime-disbursement.index') }}" class="{{ $cocok('hr.overtime-disbursement.*') }}">
+                <span class="ic">$</span> Pembayaran Lembur
+                @isset($badgeCounts['hr.overtime-disbursement.index'])<span class="lencana">{{ $badgeCounts['hr.overtime-disbursement.index'] }}</span>@endisset
+              </a>
+            @endrole
+            @can('overtime-disbursement.hc')
+              <a href="{{ route('admin.overtime-disbursement-queue') }}" class="{{ $cocok('admin.overtime-disbursement-queue') }}">
+                <span class="ic">$</span> Pembayaran Lembur (Kantor Pusat)
+                @isset($badgeCounts['admin.overtime-disbursement-queue'])<span class="lencana">{{ $badgeCounts['admin.overtime-disbursement-queue'] }}</span>@endisset
+              </a>
+            @endcan
+          </details>
+        @endif
+
+        @if ($bukanAdminSistem || $u->hasAnyPermission(['sppd-approval.view', 'sppd-disbursement.hc.view', 'sppd-memo.manage', 'sppd-payment-batch.branch', 'sppd-payment-batch.hc']) || $u->hasRole('hr_admin'))
+          <details class="grup" open>
+            <summary class="label">SPPD</summary>
+            @if ($bukanAdminSistem)
+              <a href="{{ route('sppd.create') }}" class="{{ $cocok('sppd.create') }}">
+                <span class="ic">✈</span> Ajukan SPPD
+              </a>
+              <a href="{{ route('sppd.history') }}" class="{{ $cocok('sppd.history') }}">
+                <span class="ic">🕘</span> Riwayat SPPD
+              </a>
+            @endif
+            @can('sppd-approval.view')
+              <a href="{{ route('admin.sppd-approval-queue') }}" class="{{ $cocok('admin.sppd-approval-queue') }}">
+                <span class="ic">✓</span> Antrean SPPD
+                @isset($badgeCounts['admin.sppd-approval-queue'])<span class="lencana">{{ $badgeCounts['admin.sppd-approval-queue'] }}</span>@endisset
+              </a>
+            @endcan
+            @can('sppd-disbursement.hc.view')
+              <a href="{{ route('admin.sppd-disbursement-queue') }}" class="{{ $cocok('admin.sppd-disbursement-queue') }}">
+                <span class="ic">$</span> Pencairan SPPD
+                @isset($badgeCounts['admin.sppd-disbursement-queue'])<span class="lencana">{{ $badgeCounts['admin.sppd-disbursement-queue'] }}</span>@endisset
+              </a>
+            @endcan
+            @can('sppd-memo.manage')
+              <a href="{{ route('sppd-memo.index') }}" class="{{ $cocok('sppd-memo.*') }}">
+                <span class="ic">✈</span> SPPD Massal
+              </a>
+            @endcan
+            @role('hr_admin')
+              <a href="{{ route('hr.sppd-disbursement.index') }}" class="{{ $cocok('hr.sppd-disbursement.*') }}">
+                <span class="ic">$</span> Pencairan SPPD
+                @isset($badgeCounts['hr.sppd-disbursement.index'])<span class="lencana">{{ $badgeCounts['hr.sppd-disbursement.index'] }}</span>@endisset
+              </a>
+            @endrole
+            @can('sppd-payment-batch.branch')
+              <a href="{{ route('hr.sppd-payment.groups') }}" class="{{ $cocok('hr.sppd-payment.*') }}">
+                <span class="ic">$</span> Pembayaran SPPD Massal
+              </a>
+            @endcan
+            @can('sppd-payment-batch.hc')
+              <a href="{{ route('admin.sppd-payment.groups') }}" class="{{ $cocok('admin.sppd-payment.*') }}">
+                <span class="ic">$</span> Pembayaran SPPD Massal (Bank-wide)
+              </a>
+            @endcan
+          </details>
+        @endif
+
+        @if ($bukanAdminSistem || $u->can('izin-approval.view'))
+          <details class="grup" open>
+            <summary class="label">Izin</summary>
+            @if ($bukanAdminSistem)
+              <a href="{{ route('izin.create') }}" class="{{ $cocok('izin.*') }}">
+                <span class="ic">✉</span> Ajukan Izin
+              </a>
+            @endif
+            @can('izin-approval.view')
+              <a href="{{ route('admin.izin-queue') }}" class="{{ $cocok('admin.izin-queue') }}">
+                <span class="ic">✉</span> Antrean Izin
+                @isset($badgeCounts['admin.izin-queue'])<span class="lencana">{{ $badgeCounts['admin.izin-queue'] }}</span>@endisset
+              </a>
+            @endcan
+          </details>
+        @endif
+
+        @if ($bukanAdminSistem || $u->can('shift-swap-approval.view'))
+          <details class="grup" open>
+            <summary class="label">Tukar Shift</summary>
+            @if ($bukanAdminSistem)
+              <a href="{{ route('shift.create') }}" class="{{ $cocok('shift.create') }}">
+                <span class="ic">⇄</span> Ajukan Tukar Shift
+              </a>
+              <a href="{{ route('shift.history') }}" class="{{ $cocok('shift.history') }}">
+                <span class="ic">🕘</span> Riwayat Tukar Shift
+              </a>
+            @endif
+            @can('shift-swap-approval.view')
+              <a href="{{ route('admin.shift-swap-queue') }}" class="{{ $cocok('admin.shift-swap-queue') }}">
+                <span class="ic">⇄</span> Antrean Tukar Shift
+                @isset($badgeCounts['admin.shift-swap-queue'])<span class="lencana">{{ $badgeCounts['admin.shift-swap-queue'] }}</span>@endisset
+              </a>
+            @endcan
+          </details>
+        @endif
+
+        @if ($bukanAdminSistem || $u->can('payroll-approval.manage') || $u->hasRole('hr_admin'))
+          <details class="grup" open>
+            <summary class="label">Payroll</summary>
+            @if ($bukanAdminSistem)
+              <a href="{{ route('payslip.index') }}" class="{{ $cocok('payslip.*') }}">
+                <span class="ic">§</span> Slip Gaji
+              </a>
+            @endif
+            @can('payroll-approval.manage')
+              <a href="{{ route('admin.payroll-approval-queue') }}" class="{{ $cocok('admin.payroll-approval-queue') }}">
+                <span class="ic">✓</span> Persetujuan Payroll
+                @isset($badgeCounts['admin.payroll-approval-queue'])<span class="lencana">{{ $badgeCounts['admin.payroll-approval-queue'] }}</span>@endisset
+              </a>
+            @endcan
+            @role('hr_admin')
+              <a href="{{ route('hr.payroll-deduction.index') }}" class="{{ $cocok('hr.payroll-deduction.*') }}">
+                <span class="ic">−</span> Potongan Gaji
+              </a>
+            @endrole
+          </details>
+        @endif
+
+        @if ($bukanAdminSistem || $u->hasAnyRole(['hr_admin', 'hr_approver', 'system_admin']) || $u->can('lms-enrollment-approval.view'))
           <details class="grup" open>
             <summary class="label">LMS</summary>
             @if ($bukanAdminSistem)
@@ -235,81 +422,36 @@ a{color:inherit;text-decoration:none}
                 <span class="ic">✎</span> Kelola Pelatihan
               </a>
             @endif
-          </details>
-        @endif
-
-        @if ($u->hasAnyPermission(['overtime-approval.view', 'leave-approval.view', 'payroll-approval.manage', 'employee-approval.manage', 'sppd-approval.view', 'sppd-disbursement.hc.view', 'shift-swap-approval.view', 'lms-enrollment-approval.view', 'outside-attendance-approval.view', 'izin-approval.view']))
-          <details class="grup" open>
-            <summary class="label">Persetujuan</summary>
-            @can('overtime-approval.view')
-              <a href="{{ route('admin.approval-queue') }}" class="{{ $cocok('admin.approval-queue') }}">
-                <span class="ic">✓</span> Antrean Lembur
-                @isset($badgeCounts['admin.approval-queue'])<span class="lencana">{{ $badgeCounts['admin.approval-queue'] }}</span>@endisset
-              </a>
-            @endcan
-            @can('leave-approval.view')
-              <a href="{{ route('admin.leave-approval-queue') }}" class="{{ $cocok('admin.leave-approval-queue') }}">
-                <span class="ic">✓</span> Antrean Cuti
-                @isset($badgeCounts['admin.leave-approval-queue'])<span class="lencana">{{ $badgeCounts['admin.leave-approval-queue'] }}</span>@endisset
-              </a>
-            @endcan
-            @can('payroll-approval.manage')
-              <a href="{{ route('admin.payroll-approval-queue') }}" class="{{ $cocok('admin.payroll-approval-queue') }}">
-                <span class="ic">✓</span> Persetujuan Payroll
-                @isset($badgeCounts['admin.payroll-approval-queue'])<span class="lencana">{{ $badgeCounts['admin.payroll-approval-queue'] }}</span>@endisset
-              </a>
-            @endcan
-            @can('employee-approval.manage')
-              <a href="{{ route('admin.employee-approval-queue') }}" class="{{ $cocok('admin.employee-approval-queue') }}">
-                <span class="ic">✓</span> Persetujuan Data Pegawai
-                @isset($badgeCounts['admin.employee-approval-queue'])<span class="lencana">{{ $badgeCounts['admin.employee-approval-queue'] }}</span>@endisset
-              </a>
-            @endcan
-            @can('sppd-approval.view')
-              <a href="{{ route('admin.sppd-approval-queue') }}" class="{{ $cocok('admin.sppd-approval-queue') }}">
-                <span class="ic">✓</span> Antrean SPPD
-                @isset($badgeCounts['admin.sppd-approval-queue'])<span class="lencana">{{ $badgeCounts['admin.sppd-approval-queue'] }}</span>@endisset
-              </a>
-            @endcan
-            @can('sppd-disbursement.hc.view')
-              <a href="{{ route('admin.sppd-disbursement-queue') }}" class="{{ $cocok('admin.sppd-disbursement-queue') }}">
-                <span class="ic">$</span> Pencairan SPPD
-                @isset($badgeCounts['admin.sppd-disbursement-queue'])<span class="lencana">{{ $badgeCounts['admin.sppd-disbursement-queue'] }}</span>@endisset
-              </a>
-            @endcan
-            @can('shift-swap-approval.view')
-              <a href="{{ route('admin.shift-swap-queue') }}" class="{{ $cocok('admin.shift-swap-queue') }}">
-                <span class="ic">⇄</span> Antrean Tukar Shift
-                @isset($badgeCounts['admin.shift-swap-queue'])<span class="lencana">{{ $badgeCounts['admin.shift-swap-queue'] }}</span>@endisset
-              </a>
-            @endcan
-            @can('izin-approval.view')
-              <a href="{{ route('admin.izin-queue') }}" class="{{ $cocok('admin.izin-queue') }}">
-                <span class="ic">✉</span> Antrean Izin
-                @isset($badgeCounts['admin.izin-queue'])<span class="lencana">{{ $badgeCounts['admin.izin-queue'] }}</span>@endisset
-              </a>
-            @endcan
             @can('lms-enrollment-approval.view')
               <a href="{{ route('admin.lms-enrollment-queue') }}" class="{{ $cocok('admin.lms-enrollment-queue') }}">
                 <span class="ic">✎</span> Antrean Pelatihan
                 @isset($badgeCounts['admin.lms-enrollment-queue'])<span class="lencana">{{ $badgeCounts['admin.lms-enrollment-queue'] }}</span>@endisset
               </a>
             @endcan
-            @can('outside-attendance-approval.view')
-              <a href="{{ route('admin.outside-attendance-queue') }}" class="{{ $cocok('admin.outside-attendance-queue') }}">
-                <span class="ic">✓</span> Antrean Absen Luar Kantor
-                @isset($badgeCounts['admin.outside-attendance-queue'])<span class="lencana">{{ $badgeCounts['admin.outside-attendance-queue'] }}</span>@endisset
-              </a>
-            @endcan
           </details>
         @endif
 
-        @if ($u->hasRole('hr_admin') || $u->hasAnyPermission(['hc-dashboard.view', 'overtime-disbursement.hc', 'bekal-cuti-disbursement.hc']))
+        @if ($bukanAdminSistem || $u->hasRole('hr_admin') || $u->hasAnyPermission(['hc-dashboard.view', 'overtime-disbursement.hc', 'bekal-cuti-disbursement.hc', 'employee-approval.manage']))
           <details class="grup" open>
-            <summary class="label">SDM</summary>
+            <summary class="label">Kepegawaian</summary>
+            @if ($bukanAdminSistem)
+              <a href="{{ route('ess.cv') }}" class="{{ $cocok('ess.cv*') }}">
+                <span class="ic">☰</span> CV Saya
+              </a>
+            @endif
             @can('hc-dashboard.view')
               <a href="{{ route('hc.dashboard') }}" class="{{ $cocok('hc.dashboard') }}">
                 <span class="ic">▦</span> Dashboard HC
+              </a>
+            @endcan
+            @can('branch-dashboard.view')
+              <a href="{{ route('hr.dashboard') }}" class="{{ $cocok('hr.dashboard') }}">
+                <span class="ic">▦</span> Dashboard Cabang
+              </a>
+            @endcan
+            @can('employee-position-record.view')
+              <a href="{{ route('admin.employee-position-record') }}" class="{{ $cocok('admin.employee-position-record') }}">
+                <span class="ic">▤</span> Record Pegawai
               </a>
             @endcan
             @role('hr_admin')
@@ -317,57 +459,28 @@ a{color:inherit;text-decoration:none}
                 <span class="ic">☰</span> Data Pegawai
               </a>
             @endrole
-            <a href="{{ route('sk.index') }}" class="{{ $cocok('sk.*') }}">
-              <span class="ic">§</span> Surat Keputusan
-            </a>
-            @can('attendance-recap.view')
-              <a href="{{ route('hr.attendance-recap') }}" class="{{ $cocok('hr.attendance-recap') }}">
-                <span class="ic">◉</span> Rekap Absensi
+            @if ($u->hasRole('hr_admin') || $u->hasAnyPermission(['hc-dashboard.view', 'overtime-disbursement.hc', 'bekal-cuti-disbursement.hc']))
+              <a href="{{ route('sk.index') }}" class="{{ $cocok('sk.*') }}">
+                <span class="ic">§</span> Surat Keputusan
               </a>
-            @endcan
-            <a href="{{ route('hr.overtime-recap') }}" class="{{ $cocok('hr.overtime-recap') }}">
-              <span class="ic">Σ</span> Rekap Biaya Lembur
-            </a>
-            @role('hr_admin')
-              <a href="{{ route('hr.payroll-deduction.index') }}" class="{{ $cocok('hr.payroll-deduction.*') }}">
-                <span class="ic">−</span> Potongan Gaji
-              </a>
-              <a href="{{ route('hr.overtime-disbursement.index') }}" class="{{ $cocok('hr.overtime-disbursement.*') }}">
-                <span class="ic">$</span> Pembayaran Lembur
-                @isset($badgeCounts['hr.overtime-disbursement.index'])<span class="lencana">{{ $badgeCounts['hr.overtime-disbursement.index'] }}</span>@endisset
-              </a>
-              <a href="{{ route('hr.bekal-cuti.index') }}" class="{{ $cocok('hr.bekal-cuti.*') }}">
-                <span class="ic">$</span> Pencairan Bekal Cuti
-                @isset($badgeCounts['hr.bekal-cuti.index'])<span class="lencana">{{ $badgeCounts['hr.bekal-cuti.index'] }}</span>@endisset
-              </a>
-              <a href="{{ route('hr.sppd-disbursement.index') }}" class="{{ $cocok('hr.sppd-disbursement.*') }}">
-                <span class="ic">$</span> Pencairan SPPD
-                @isset($badgeCounts['hr.sppd-disbursement.index'])<span class="lencana">{{ $badgeCounts['hr.sppd-disbursement.index'] }}</span>@endisset
-              </a>
-            @endrole
-            @can('overtime-disbursement.hc')
-              <a href="{{ route('admin.overtime-disbursement-queue') }}" class="{{ $cocok('admin.overtime-disbursement-queue') }}">
-                <span class="ic">$</span> Pembayaran Lembur (Kantor Pusat)
-                @isset($badgeCounts['admin.overtime-disbursement-queue'])<span class="lencana">{{ $badgeCounts['admin.overtime-disbursement-queue'] }}</span>@endisset
-              </a>
-            @endcan
-            @can('bekal-cuti-disbursement.hc')
-              <a href="{{ route('admin.bekal-cuti-queue') }}" class="{{ $cocok('admin.bekal-cuti-queue') }}">
-                <span class="ic">$</span> Pencairan Bekal Cuti (Bank-wide)
-                @isset($badgeCounts['admin.bekal-cuti-queue'])<span class="lencana">{{ $badgeCounts['admin.bekal-cuti-queue'] }}</span>@endisset
+            @endif
+            @can('employee-approval.manage')
+              <a href="{{ route('admin.employee-approval-queue') }}" class="{{ $cocok('admin.employee-approval-queue') }}">
+                <span class="ic">✓</span> Persetujuan Data Pegawai
+                @isset($badgeCounts['admin.employee-approval-queue'])<span class="lencana">{{ $badgeCounts['admin.employee-approval-queue'] }}</span>@endisset
               </a>
             @endcan
           </details>
         @endif
 
-        @role('auditor')
+        @can('audit-log.view')
           <details class="grup" open>
             <summary class="label">Pengawasan</summary>
             <a href="{{ route('audit.index') }}" class="{{ $cocok('audit.index') }}">
               <span class="ic">◎</span> Log Audit
             </a>
           </details>
-        @endrole
+        @endcan
 
         @if ($u->hasAnyRole(['system_admin', 'hr_approver']) || $u->hasAnyPermission(['sysadmin-content.manage', 'org-chart.view']))
           <details class="grup" open>
@@ -411,6 +524,9 @@ a{color:inherit;text-decoration:none}
               </a>
               <a href="{{ route('sysadmin.journal-accounts.index') }}" class="{{ $cocok('sysadmin.journal-accounts.*') }}">
                 <span class="ic">≡</span> Daftar Akun Jurnal
+              </a>
+              <a href="{{ route('sysadmin.mobile-menu.index') }}" class="{{ $cocok('sysadmin.mobile-menu.*') }}">
+                <span class="ic">▦</span> Menu Aplikasi Mobile
               </a>
             @endcan
           </details>
@@ -468,8 +584,39 @@ a{color:inherit;text-decoration:none}
   <div class="app-main">
     <header class="atas-halaman">
       <div>
+        @unless (request()->routeIs(['ess.dashboard', 'sysadmin.users.index']))
+          <a href="{{ url('/') }}" class="btn luar kecil" style="margin-bottom:8px"
+             onclick="if (window.history.length > 1) { event.preventDefault(); history.back(); }">
+            <span aria-hidden="true">←</span> Kembali
+          </a>
+        @endunless
         <div class="jd">@yield('judul', 'HCIS')</div>
       </div>
+      @auth
+        <details class="lonceng">
+          <summary aria-label="Notifikasi">
+            🔔
+            @if ($unreadNotificationCount > 0)
+              <span class="lonceng-lencana">{{ $unreadNotificationCount > 9 ? '9+' : $unreadNotificationCount }}</span>
+            @endif
+          </summary>
+          <div class="lonceng-panel">
+            @forelse ($recentNotifications as $n)
+              <a href="{{ route('notifikasi.baca', $n->id) }}"
+                 class="lonceng-item{{ $n->read_at === null ? ' belum-dibaca' : '' }}"
+                 style="display:block;color:inherit">
+                {{ $n->data['message'] ?? 'Notifikasi' }}
+                <div class="waktu">{{ $n->created_at->diffForHumans() }}</div>
+              </a>
+            @empty
+              <div class="lonceng-kosong">Belum ada notifikasi.</div>
+            @endforelse
+            <div class="lonceng-kaki">
+              <a href="{{ route('notifikasi.index') }}">Lihat semua notifikasi</a>
+            </div>
+          </div>
+        </details>
+      @endauth
     </header>
 
     <div class="wadah">
@@ -498,6 +645,35 @@ a{color:inherit;text-decoration:none}
     </div>
   </div>
 </div>
+
+<script>
+  // Dipakai SEMUA antrean persetujuan (Cuti/Lembur/SPPD/Izin/Tukar Shift/
+  // Pendaftaran Pelatihan) — SATU fungsi bersama alih-alih menduplikasi
+  // dialog alasan penolakan 6 kali. Alasan WAJIB diisi (menolak butuh
+  // justifikasi, menyetujui tidak) — lihat App\Notifications\RequestDecided.
+  window.mintaAlasanTolak = function (formEl, event) {
+    event.preventDefault();
+
+    window.Swal.fire({
+      title: 'Alasan penolakan',
+      input: 'textarea',
+      inputPlaceholder: 'Jelaskan alasan penolakan…',
+      showCancelButton: true,
+      confirmButtonText: 'Tolak Pengajuan',
+      cancelButtonText: 'Batal',
+      inputValidator: (value) => (!value || value.trim() === '' ? 'Alasan wajib diisi.' : undefined),
+    }).then((result) => {
+      if (result.isConfirmed) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'catatan';
+        input.value = result.value;
+        formEl.appendChild(input);
+        formEl.submit();
+      }
+    });
+  };
+</script>
 
 @yield('skrip')
 </body>

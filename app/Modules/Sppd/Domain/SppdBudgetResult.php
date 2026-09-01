@@ -18,6 +18,16 @@ use App\Core\Domain\Money;
  * rencana/batas persetujuan, BUKAN klaim bahwa jumlah ini yang akan
  * dibayarkan. Realisasi sesuai invoice adalah tahap lanjutan yang
  * belum dibangun.
+ *
+ * `hotelKompensasi` — kompensasi HARIAN bila pegawai TIDAK mengambil
+ * fasilitas hotel yang disediakan Bank (BPP, tarif `hotel_compensation`
+ * — sebelumnya disemai di pay_sppd_tariffs tapi TIDAK PERNAH dipakai di
+ * mana pun sampai kini). Berlaku pada kategori yang SAMA dengan
+ * hotel/angkutan/transportasi (memilikiPlafonAtCost()) — mutually
+ * exclusive dengan `hotel` secara BISNIS (ambil kamar ATAU kompensasi,
+ * bukan dua-duanya), tapi TIDAK ditegakkan sebagai aturan di kelas ini
+ * (silakan pilih salah satu/keduanya lewat centang komponen di SPPD
+ * Massal — validasi mutual-exclusivity bukan tanggung jawab kelas ini).
  */
 final readonly class SppdBudgetResult
 {
@@ -25,6 +35,7 @@ final readonly class SppdBudgetResult
         public Money $uangMakan,
         public Money $uangSaku,
         public ?Money $hotel,
+        public ?Money $hotelKompensasi,
         public ?Money $angkutanSetempat,
         public ?Money $transportasiTujuan,
         public string $mataUang,
@@ -36,12 +47,12 @@ final readonly class SppdBudgetResult
         return $this->uangMakan->add($this->uangSaku);
     }
 
-    /** Plafon Hotel + Angkutan Setempat + Transportasi Tujuan (yang berlaku). */
+    /** Plafon Hotel + Kompensasi Hotel + Angkutan Setempat + Transportasi Tujuan (yang berlaku). */
     public function totalPlafonAtCost(): Money
     {
         $total = Money::zero();
 
-        foreach ([$this->hotel, $this->angkutanSetempat, $this->transportasiTujuan] as $komponen) {
+        foreach ([$this->hotel, $this->hotelKompensasi, $this->angkutanSetempat, $this->transportasiTujuan] as $komponen) {
             if ($komponen !== null) {
                 $total = $total->add($komponen);
             }

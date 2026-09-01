@@ -57,17 +57,19 @@ tbody tr:last-child td{border-bottom:0}
           <td class="angka">{{ $en->score ?? '—' }}</td>
           <td>{{ $en->certificate_number ?? '—' }}</td>
           <td>
-            @if ($en->status === 'approved')
+            @if ($en->status === 'approved' && $en->completion_status === null)
               <form method="POST" action="{{ route('lms.admin.batches.record-completion', $en->id) }}" class="form-nilai">
                 @csrf
                 <select name="completion_status" required>
                   <option value="">Pilih...</option>
-                  <option value="lulus" @selected($en->completion_status === 'lulus')>Lulus</option>
-                  <option value="tidak_lulus" @selected($en->completion_status === 'tidak_lulus')>Tidak Lulus</option>
+                  <option value="lulus">Lulus</option>
+                  <option value="tidak_lulus">Tidak Lulus</option>
                 </select>
-                <input type="number" name="score" min="0" max="100" step="0.01" value="{{ $en->score }}" placeholder="Nilai" style="width:70px">
+                <input type="number" name="score" min="0" max="100" step="0.01" placeholder="Nilai" style="width:70px">
                 <button type="submit" class="mini">Simpan</button>
               </form>
+            @elseif ($en->status === 'approved')
+              <span style="font-size:11px;color:var(--teks-lemah)">Sudah dicatat</span>
             @else
               <span style="font-size:11px;color:var(--teks-lemah)">Tidak disetujui</span>
             @endif

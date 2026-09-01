@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Employee\Application;
 
+use App\Modules\Employee\Domain\ProfileChangeConflict;
 use App\Modules\Employee\Domain\SelfEditableEmployeeField;
 use App\Shared\Audit\Domain\AuditAction;
 use App\Shared\Audit\Domain\AuditActor;
@@ -52,10 +53,14 @@ final class UpdateOwnPersonalDetails
         DB::transaction(function () use ($employeeId, $changes, $oldValues, $current, $actor) {
             $now = new DateTimeImmutable;
 
-            DB::table('emp_employees')
+            $affected = DB::table('emp_employees')
                 ->where('id', $employeeId)
                 ->where('version', $current->version)
                 ->update([...$changes, 'updated_at' => $now, 'version' => $current->version + 1]);
+
+            if ($affected === 0) {
+                throw ProfileChangeConflict::forEmployee($employeeId);
+            }
 
             $this->audit->append(new AuditEntry(
                 occurredAt: $now,

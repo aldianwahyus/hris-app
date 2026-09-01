@@ -72,9 +72,19 @@ export function PayslipScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.period}>{item.period}</Text>
-                  <Text style={styles.amount}>{formatRupiah(item.take_home_partial_cents)}</Text>
+                  <Text style={styles.amount}>{formatRupiah(item.take_home_cents)}</Text>
                 </View>
               </View>
+              {(item.deductions.length > 0 || item.additions.length > 0) && (
+                <View style={styles.lineItems}>
+                  {item.additions.map((a, i) => (
+                    <Text key={`a-${i}`} style={styles.lineItemAddition}>+ {formatRupiah(a.amount_cents)}{a.note ? ` (${a.note})` : ''}</Text>
+                  ))}
+                  {item.deductions.map((d, i) => (
+                    <Text key={`d-${i}`} style={styles.lineItemDeduction}>- {formatRupiah(d.amount_cents)}{d.note ? ` (${d.note})` : ''}</Text>
+                  ))}
+                </View>
+              )}
               {pending.length > 0 && (
                 <Text style={styles.hint}>Belum termasuk: {pending.join(', ')} — unduh slip lengkap lewat aplikasi web.</Text>
               )}
@@ -113,5 +123,8 @@ const styles = StyleSheet.create({
   },
   period: { ...type.h2, fontSize: 14, textTransform: 'capitalize' },
   amount: { ...type.mono, fontSize: 17, fontFamily: fonts.monoBold, color: colors.primaryDark, marginTop: 2 },
+  lineItems: { marginTop: spacing.xs, gap: 2 },
+  lineItemAddition: { ...type.mono, fontSize: 11.5, color: colors.primary },
+  lineItemDeduction: { ...type.mono, fontSize: 11.5, color: colors.danger },
   hint: { fontSize: 11, color: colors.textMuted, marginTop: spacing.xs, lineHeight: 15 },
 });

@@ -24,8 +24,12 @@ use Tests\TestCase;
  * nol), TK/0 (golongan A) — bekal cuti bruto otomatis = Rp5.632.000
  * (sama dengan gaji kotor). Penghasilan gabungan Rp11.264.000 jatuh
  * di lapisan golongan A 11.050.000–11.600.000 (tarif 3,5%, lihat
- * pay_pph21_ter_rates seed). Pajak = 5.632.000 × 3,5% = Rp197.120;
- * bersih = Rp5.434.880.
+ * pay_pph21_ter_rates seed). Pajak = 5.632.000 × 3,5% = Rp197.120.
+ *
+ * GROSS-UP (bukti dari Nota Debet/Lampiran resmi Bank NTB Syariah —
+ * "Jumlah Diterima" pegawai SAMA dengan "Bekal Cuti" bruto, pajak
+ * dibukukan terpisah, TIDAK memotong rekening pegawai): net_cents =
+ * gross_cents, BUKAN gross-tax — beda dari Lembur/SPPD.
  */
 final class BekalCutiPaymentBatchTest extends TestCase
 {
@@ -35,7 +39,7 @@ final class BekalCutiPaymentBatchTest extends TestCase
 
     private const EXPECTED_TAX_CENTS = 19_712_000; // 5.632.000 × 3,5%
 
-    private const EXPECTED_NET_CENTS = 543_488_000;
+    private const EXPECTED_NET_CENTS = self::GAJI_KOTOR_CENTS; // gross-up: pegawai terima UTUH bruto
 
     public function test_admin_hc_pilih_divisi_lalu_bayar_bekal_cuti_otomatis_1x_gaji_dengan_tarif_ter_benar(): void
     {
@@ -90,7 +94,7 @@ final class BekalCutiPaymentBatchTest extends TestCase
         $this->assertSame(self::GAJI_KOTOR_CENTS, $row->amount_cents);
         $this->assertSame($batch->reference_number, $row->disbursement_reference);
 
-        foreach (['print-memo', 'print-nota-debet'] as $suffix) {
+        foreach (['print-memo', 'print-nota-debet', 'print-lampiran-penerima'] as $suffix) {
             $print = $this->actingAs($nurAisyah)->get("/persetujuan/bekal-cuti/batch/{$batchId}/cetak/".str_replace('print-', '', $suffix));
             $print->assertOk();
             $this->assertSame('application/pdf', $print->headers->get('Content-Type'));

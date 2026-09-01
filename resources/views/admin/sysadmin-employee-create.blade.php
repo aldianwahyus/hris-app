@@ -19,8 +19,13 @@
 </div>
 
 <div class="kartu">
-  <form method="POST" action="{{ route('sysadmin.employees.store') }}">
+  <form method="POST" action="{{ route('sysadmin.employees.store') }}" enctype="multipart/form-data">
     @csrf
+
+    <div class="bidang">
+      <label for="photo">Foto Pegawai (opsional — JPG/PNG, maks 2 MB)</label>
+      <input type="file" name="photo" id="photo" accept=".jpg,.jpeg,.png">
+    </div>
 
     <div class="baris-bidang">
       <div class="bidang">

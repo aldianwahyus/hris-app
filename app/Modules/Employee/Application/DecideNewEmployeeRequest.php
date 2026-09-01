@@ -81,6 +81,7 @@ final class DecideNewEmployeeRequest
                 'job_grade' => $data['job_grade'] ?? null,
                 'salary_step' => $data['salary_step'] ?? 1,
                 'email' => $data['email'] ?? null,
+                'photo_path' => $data['photo_path'] ?? null,
                 'alamat' => $data['alamat'] ?? null,
                 'no_telepon' => $data['no_telepon'] ?? null,
                 'kontak_darurat_nama' => $data['kontak_darurat_nama'] ?? null,

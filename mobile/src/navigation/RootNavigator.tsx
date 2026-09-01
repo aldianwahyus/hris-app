@@ -20,6 +20,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
+import { useMobileMenu } from '../context/MobileMenuContext';
 import { AuthStackParamList, MainStackParamList, MainTabParamList } from './types';
 import { colors, radius, shadow } from '../theme';
 import { LoginScreen } from '../screens/LoginScreen';
@@ -56,6 +57,7 @@ function AuthNavigator() {
 /** Tab bar mengambang bergaya aplikasi perbankan modern (rounded, shadow, terangkat dari tepi). */
 function MainTabs() {
   const insets = useSafeAreaInsets();
+  const { isEnabled } = useMobileMenu();
 
   return (
     <MainTab.Navigator
@@ -85,9 +87,9 @@ function MainTabs() {
       })}
     >
       <MainTab.Screen name="Home" component={HomeScreen} options={{ title: 'Beranda' }} />
-      <MainTab.Screen name="Absensi" component={AttendanceScreen} />
-      <MainTab.Screen name="Cuti" component={LeaveScreen} />
-      <MainTab.Screen name="Lembur" component={OvertimeScreen} />
+      {isEnabled('absensi') && <MainTab.Screen name="Absensi" component={AttendanceScreen} />}
+      {isEnabled('cuti') && <MainTab.Screen name="Cuti" component={LeaveScreen} />}
+      {isEnabled('lembur') && <MainTab.Screen name="Lembur" component={OvertimeScreen} />}
       <MainTab.Screen name="Lainnya" component={LainnyaScreen} />
     </MainTab.Navigator>
   );

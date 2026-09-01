@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Lms\Application;
 
+use App\Models\User;
+use App\Notifications\RequestDecided;
 use App\Shared\Audit\Domain\AuditAction;
 use App\Shared\Audit\Domain\AuditActor;
 use App\Shared\Audit\Domain\AuditEntry;
@@ -23,17 +25,17 @@ final class DecideEnrollment
 
     public function approve(string $enrollmentId, string $approverId, AuditActor $actor): void
     {
-        $this->decide($enrollmentId, $approverId, 'approved', AuditAction::Approved, $actor);
+        $this->decide($enrollmentId, $approverId, 'approved', AuditAction::Approved, $actor, null);
     }
 
-    public function reject(string $enrollmentId, string $approverId, AuditActor $actor): void
+    public function reject(string $enrollmentId, string $approverId, AuditActor $actor, ?string $note): void
     {
-        $this->decide($enrollmentId, $approverId, 'rejected', AuditAction::Rejected, $actor);
+        $this->decide($enrollmentId, $approverId, 'rejected', AuditAction::Rejected, $actor, $note);
     }
 
-    private function decide(string $enrollmentId, string $approverId, string $status, AuditAction $action, AuditActor $actor): void
+    private function decide(string $enrollmentId, string $approverId, string $status, AuditAction $action, AuditActor $actor, ?string $note): void
     {
-        DB::transaction(function () use ($enrollmentId, $approverId, $status, $action, $actor) {
+        $decided = DB::transaction(function () use ($enrollmentId, $approverId, $status, $action, $actor, $note) {
             $enrollment = DB::table('lms_enrollments')->where('id', $enrollmentId)->lockForUpdate()->first();
 
             if ($enrollment === null) {
@@ -41,7 +43,7 @@ final class DecideEnrollment
             }
 
             if ($enrollment->status !== 'pending') {
-                return;
+                return null;
             }
 
             $now = new DateTimeImmutable;
@@ -50,6 +52,7 @@ final class DecideEnrollment
                 'status' => $status,
                 'approver_id' => $approverId,
                 'decided_at' => $now,
+                'decision_note' => $note,
                 'updated_at' => $now,
             ]);
 
@@ -61,6 +64,18 @@ final class DecideEnrollment
                 action: $action,
                 contextRef: $enrollment->enrollment_number,
             ));
+
+            return $enrollment;
         });
+
+        // Notifikasi DI LUAR transaksi (mengirim mail/DB write ke tabel
+        // notifications tidak boleh membatalkan keputusan approval bila
+        // gagal) — pola sengaja beda dari sisa method ini yang memang
+        // butuh transaksi untuk lock+update+audit atomik. Pendaftaran
+        // pelatihan SATU tahap — setiap keputusan sudah final.
+        if ($decided !== null) {
+            $user = User::query()->where('employee_id', $decided->employee_id)->first();
+            $user?->notify(new RequestDecided($decided->enrollment_number, 'pendaftaran pelatihan', $status === 'approved', $note));
+        }
     }
 }

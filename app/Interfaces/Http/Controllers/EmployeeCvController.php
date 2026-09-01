@@ -6,6 +6,7 @@ namespace App\Interfaces\Http\Controllers;
 
 use App\Modules\Access\Contracts\CurrentActor;
 use App\Modules\Employee\Application\UpdateOwnPersonalDetails;
+use App\Modules\Employee\Domain\ProfileChangeConflict;
 use App\Modules\Employee\Domain\SelfEditableEmployeeField;
 use App\Shared\Audit\Domain\AuditActor;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -66,7 +67,16 @@ final class EmployeeCvController extends Controller
         $changes = [];
 
         foreach (SelfEditableEmployeeField::values() as $field) {
-            $value = $validated[$field] ?? null;
+            // photo_path diubah lewat updatePhoto()/removePhoto() (rute
+            // & form TERPISAH, unggah berkas) — tidak pernah ada di
+            // $validated milik form teks ini. Tanpa pengecekan ini,
+            // photo_path akan dianggap "berubah jadi null" setiap kali
+            // form data pribadi biasa disimpan, menghapus foto diam-diam.
+            if (! array_key_exists($field, $validated)) {
+                continue;
+            }
+
+            $value = $validated[$field];
 
             if (($employee->{$field} ?? null) === $value) {
                 continue;
@@ -81,11 +91,85 @@ final class EmployeeCvController extends Controller
 
         try {
             $this->update->handle($employeeId, $changes, $this->currentActor($request));
-        } catch (InvalidArgumentException|RuntimeException $e) {
+        } catch (InvalidArgumentException|RuntimeException|ProfileChangeConflict $e) {
             return back()->withInput()->with('gagal', $e->getMessage());
         }
 
         return redirect()->route('ess.cv')->with('sukses', 'CV berhasil diperbarui.');
+    }
+
+    public function updatePhoto(Request $request): RedirectResponse
+    {
+        $employee = $this->ownEmployee();
+        $employeeId = $this->actor->employeeId();
+
+        abort_if($employeeId === null, 403, 'Akun ini belum ditautkan ke data pegawai.');
+
+        // validateWithBag('photo', ...) — halaman ini punya BEBERAPA form
+        // sekaligus (data pribadi teks, unggah foto); tanpa bag bernama,
+        // error unggah foto bisa salah tertampil seolah milik form teks
+        // (atau sebaliknya) karena keduanya berbagi $errors default yang sama.
+        $request->validateWithBag('photo', [
+            'photo' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
+        ], [
+            'photo.required' => 'Pilih berkas foto terlebih dahulu.',
+            'photo.image' => 'Foto harus berupa berkas gambar.',
+            'photo.mimes' => 'Foto hanya boleh berformat JPG atau PNG.',
+            'photo.max' => 'Ukuran foto maksimal 2 MB.',
+        ]);
+
+        $stored = $request->file('photo')->store('pegawai/foto', 's3');
+
+        abort_if($stored === false, 500, 'Gagal mengunggah foto — coba lagi.');
+
+        try {
+            $this->update->handle($employeeId, ['photo_path' => $stored], $this->currentActor($request));
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            Storage::disk('s3')->delete($stored);
+
+            return back()->with('gagal', $e->getMessage());
+        }
+
+        // Foto LAMA (kalau ada) dihapus SETELAH baris baru berhasil
+        // tersimpan — supaya kalau update() di atas gagal, foto lama
+        // yang masih dipakai tidak ikut hilang.
+        if ($employee->photo_path !== null && $employee->photo_path !== $stored) {
+            Storage::disk('s3')->delete($employee->photo_path);
+        }
+
+        return redirect()->route('ess.cv')->with('sukses', 'Foto profil berhasil diperbarui.');
+    }
+
+    public function removePhoto(Request $request): RedirectResponse
+    {
+        $employee = $this->ownEmployee();
+        $employeeId = $this->actor->employeeId();
+
+        abort_if($employeeId === null, 403, 'Akun ini belum ditautkan ke data pegawai.');
+
+        if ($employee->photo_path === null) {
+            return redirect()->route('ess.cv')->with('sukses', 'Tidak ada foto untuk dihapus.');
+        }
+
+        try {
+            $this->update->handle($employeeId, ['photo_path' => null], $this->currentActor($request));
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            return back()->with('gagal', $e->getMessage());
+        }
+
+        Storage::disk('s3')->delete($employee->photo_path);
+
+        return redirect()->route('ess.cv')->with('sukses', 'Foto profil dihapus.');
+    }
+
+    /** Ditampilkan langsung (inline), BEDA dari downloadSk()/download lain di aplikasi ini yang selalu memaksa unduh. */
+    public function photo(): StreamedResponse
+    {
+        $employee = $this->ownEmployee();
+
+        abort_if($employee->photo_path === null, 404);
+
+        return Storage::disk('s3')->response($employee->photo_path);
     }
 
     public function downloadSk(string $id): StreamedResponse

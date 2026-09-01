@@ -43,6 +43,93 @@ final class HcDashboardTest extends TestCase
         $response->assertForbidden();
     }
 
+    /** system_admin SEKARANG juga diberi akses (migrasi 2026_09_18_000002) — sebelumnya hanya hr_approver. */
+    public function test_system_admin_dapat_mengakses_dashboard_hc(): void
+    {
+        $response = $this->actingAs($this->userWithNrp('SYSADMIN'))->get('/dasbor-hc');
+
+        $response->assertOk();
+        $response->assertSeeText('Dashboard HC');
+    }
+
+    public function test_rincian_status_kepegawaian_dan_gender_ditampilkan(): void
+    {
+        $response = $this->actingAs($this->userWithNrp('2014.02.0061'))->get('/dasbor-hc');
+
+        $response->assertOk();
+        $response->assertSeeText('Pegawai Tetap');
+        $response->assertSeeText('Pegawai Laki-laki');
+        $response->assertSeeText('Pegawai Perempuan');
+    }
+
+    public function test_ulang_tahun_dalam_3_bulan_ke_depan_muncul_di_daftar(): void
+    {
+        $employeeId = DB::table('emp_employees')->where('nrp', '2018.03.0142')->value('id');
+        $dalamSebulan = (new DateTimeImmutable('+1 month'));
+        DB::table('emp_employees')->where('id', $employeeId)->update([
+            'birth_date' => $dalamSebulan->modify('-30 years')->format('Y-m-d'),
+        ]);
+
+        $response = $this->actingAs($this->userWithNrp('2014.02.0061'))->get('/dasbor-hc');
+
+        $response->assertOk();
+        $response->assertSeeText('Ulang tahun 3 bulan ke depan');
+        $response->assertSeeText('Siti Rahmawati');
+    }
+
+    public function test_ulang_tahun_lebih_dari_3_bulan_lagi_tidak_muncul(): void
+    {
+        $employeeId = DB::table('emp_employees')->where('nrp', '2018.03.0142')->value('id');
+        $enamBulanLagi = (new DateTimeImmutable('+6 months'));
+        DB::table('emp_employees')->where('id', $employeeId)->update([
+            'birth_date' => $enamBulanLagi->modify('-30 years')->format('Y-m-d'),
+        ]);
+
+        $response = $this->actingAs($this->userWithNrp('2014.02.0061'))->get('/dasbor-hc');
+
+        $response->assertOk();
+        $response->assertSeeText('Tidak ada pegawai berulang tahun dalam periode ini.');
+    }
+
+    /** MPP = 6 bulan sebelum usia pensiun normal (RETIREMENT_NORMAL_AGE=56) — jadi usia 55 tahun 6 bulan. */
+    public function test_pegawai_yang_akan_memasuki_mpp_muncul_di_daftar(): void
+    {
+        $employeeId = DB::table('emp_employees')->where('nrp', '2018.03.0142')->value('id');
+        // Lahir supaya genap 55 tahun 6 bulan dalam 1 bulan dari sekarang.
+        $birthDate = (new DateTimeImmutable('+1 month'))->modify('-55 years')->modify('-6 months');
+        DB::table('emp_employees')->where('id', $employeeId)->update(['birth_date' => $birthDate->format('Y-m-d')]);
+
+        $response = $this->actingAs($this->userWithNrp('2014.02.0061'))->get('/dasbor-hc');
+
+        $response->assertOk();
+        $response->assertSeeText('Akan memasuki MPP');
+        $response->assertSeeText('Siti Rahmawati');
+    }
+
+    public function test_penghargaan_masa_bakti_15_tahun_muncul_di_daftar(): void
+    {
+        $employeeId = DB::table('emp_employees')->where('nrp', '2018.03.0142')->value('id');
+        $joinDate = (new DateTimeImmutable('+1 month'))->modify('-15 years');
+        DB::table('emp_employees')->where('id', $employeeId)->update(['join_date' => $joinDate->format('Y-m-d')]);
+
+        $response = $this->actingAs($this->userWithNrp('2014.02.0061'))->get('/dasbor-hc');
+
+        $response->assertOk();
+        $response->assertSeeText('Penghargaan Masa Bakti');
+        $response->assertSeeText('15 Tahun');
+        $response->assertSeeText('Siti Rahmawati');
+    }
+
+    public function test_jumlah_pegawai_dan_persebaran_jabatan_per_kc_kcp_ditampilkan(): void
+    {
+        $response = $this->actingAs($this->userWithNrp('2014.02.0061'))->get('/dasbor-hc');
+
+        $response->assertOk();
+        $response->assertSeeText('Jumlah pegawai per KC & KCP');
+        $response->assertSeeText('Persebaran jabatan per KC & KCP');
+        $response->assertSeeText('KC Mataram');
+    }
+
     public function test_headcount_bersifat_bank_wide_bukan_office_scoped(): void
     {
         $response = $this->actingAs($this->userWithNrp('2014.02.0061'))->get('/dasbor-hc');

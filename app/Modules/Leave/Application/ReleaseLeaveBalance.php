@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Leave\Application;
 
+use DateTimeImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -29,7 +30,7 @@ final class ReleaseLeaveBalance
                 return; // sudah dilepas sebelumnya, atau pengajuan lama tanpa snapshot — tidak ada yang bisa dibalik.
             }
 
-            $year = (int) date('Y', strtotime((string) $request->start_date));
+            $year = (int) (new DateTimeImmutable((string) $request->start_date))->format('Y');
             $debits = json_decode((string) $request->bucket_debits, true) ?? [];
 
             foreach ($debits as $debit) {

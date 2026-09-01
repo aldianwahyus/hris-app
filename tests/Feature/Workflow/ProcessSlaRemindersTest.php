@@ -211,6 +211,74 @@ final class ProcessSlaRemindersTest extends TestCase
         Notification::assertNotSentTo($this->nurAisyah(), ApprovalSlaExpired::class);
     }
 
+    /**
+     * Regresi (bug ditemukan lewat audit kode): approval controller
+     * (LeaveApprovalQueueController dkk.) menulis keputusan LANGSUNG ke
+     * leave_requests.status, TIDAK PERNAH memanggil
+     * WorkflowInstance::decide()/save() — jadi wf_instances/
+     * wf_instance_steps tetap 'pending' SELAMANYA meski pengajuan sudah
+     * disetujui. Tanpa perbaikan documentStillPending()/
+     * reconcileAlreadyDecided(), sapuan SLA yang berjalan setelah tenggat
+     * (dihitung dari SUBMIT, bukan dari keputusan) akan salah menganggap
+     * pengajuan yang SUDAH disetujui sebagai kedaluwarsa: menimpa
+     * status='expired' (dicegah whereIn status di markDocumentExpired,
+     * TIDAK berlaku di sini karena status sudah 'approved') DAN — yang
+     * jauh lebih berbahaya — mengembalikan saldo cuti yang sudah benar
+     * dipakai/disetujui.
+     */
+    public function test_cuti_yang_sudah_disetujui_tidak_ikut_kedaluwarsa_walau_lewat_tenggat_sla(): void
+    {
+        Notification::fake();
+
+        $employeeId = DB::table('emp_employees')->where('nrp', '2018.03.0142')->value('id');
+        $actor = new AuditActor(actorId: $employeeId, actorRole: 'pegawai');
+
+        $usedDaysBefore = (float) DB::table('leave_balances')
+            ->where('employee_id', $employeeId)->where('year', 2026)->where('bucket_type', 'current_year')
+            ->value('used_days');
+
+        $requestNumber = app(SubmitLeaveRequest::class)->handle(
+            employeeId: $employeeId,
+            leaveType: LeaveType::CutiTahunan,
+            startDate: new DateTimeImmutable('2026-09-01'),
+            endDate: new DateTimeImmutable('2026-09-02'),
+            reason: null,
+            actor: $actor,
+        );
+
+        $request = DB::table('leave_requests')->where('request_number', $requestNumber)->first();
+
+        // Setujui KEDUA tahap secara langsung lewat tabel bisnis — PERSIS
+        // seperti yang dilakukan LeaveApprovalQueueController::decide(),
+        // TANPA pernah menyentuh wf_instances/wf_instance_steps (itulah
+        // intinya: baris Workflow Engine sengaja dibiarkan basi di sini).
+        DB::table('leave_requests')->where('id', $request->id)->update([
+            'status' => 'approved',
+            'approver_id' => $employeeId,
+            'decided_at' => now(),
+        ]);
+
+        // Mundurkan tenggat SLA jauh ke belakang — seolah sapuan berjalan
+        // lama setelah pengajuan SEHARUSNYA sudah diputus.
+        DB::table('wf_instance_steps')->where('instance_id', $request->wf_instance_id)->update([
+            'started_at' => now()->subDays(31),
+            'sla_due_at' => now()->subDay(),
+        ]);
+
+        $this->artisan('workflow:process-sla')->assertExitCode(0);
+
+        $this->assertSame('approved', DB::table('leave_requests')->where('id', $request->id)->value('status'), 'Pengajuan yang sudah disetujui TIDAK BOLEH berubah jadi expired.');
+
+        $usedDaysAfter = (float) DB::table('leave_balances')
+            ->where('employee_id', $employeeId)->where('year', 2026)->where('bucket_type', 'current_year')
+            ->value('used_days');
+        $this->assertEquals($usedDaysBefore + 2.0, $usedDaysAfter, 'Saldo cuti yang sudah disetujui TIDAK BOLEH dikembalikan oleh sapuan SLA.');
+
+        $this->assertNotNull(DB::table('leave_requests')->where('id', $request->id)->value('bucket_debits'), 'Snapshot debit TIDAK BOLEH dikosongkan untuk pengajuan yang sudah disetujui.');
+
+        Notification::assertNothingSent();
+    }
+
     public function test_pengingat_tahap_1_dikirim_ke_atasan_langsung_bukan_pimpinan_kantor(): void
     {
         Notification::fake();

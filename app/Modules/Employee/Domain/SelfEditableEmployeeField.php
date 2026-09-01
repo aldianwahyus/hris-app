@@ -22,6 +22,16 @@ enum SelfEditableEmployeeField: string
     case PendidikanTerakhir = 'pendidikan_terakhir';
     case PendidikanJurusan = 'pendidikan_jurusan';
 
+    /**
+     * Diubah lewat form/rute TERPISAH (EmployeeCvController::updatePhoto/
+     * removePhoto, unggah berkas — bukan field teks biasa) — TETAP masuk
+     * whitelist enum ini supaya UpdateOwnPersonalDetails::handle() bisa
+     * menerimanya (whitelist tunggal), tapi EmployeeCvController::update()
+     * (form data pribadi teks) SENGAJA melewatkannya lewat pengecekan
+     * array_key_exists — lihat komentar di sana.
+     */
+    case PhotoPath = 'photo_path';
+
     /** @return array<int, string> */
     public static function values(): array
     {

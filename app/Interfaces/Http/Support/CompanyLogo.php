@@ -14,6 +14,12 @@ use RuntimeException;
  * base64 dibaca sekali per proses dan disimpan statis — beberapa
  * dokumen bisa dirender dalam satu permintaan yang sama (mis. pratinjau
  * modal memuat 2-3 dokumen berurutan).
+ *
+ * SENGAJA TETAP logo Bank NTB Syariah asli (bukan lambang HCIS baru
+ * yang dipakai layar login/sidebar) — dokumen resmi cetak (Memo
+ * Internal, Nota Debet, Jurnal Slip, dst.) harus tetap memakai lambang
+ * korporat resmi sesuai instruksi eksplisit pengguna, terlepas dari
+ * lambang HCIS yang sudah diterapkan di permukaan web/mobile lain.
  */
 final class CompanyLogo
 {

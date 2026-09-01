@@ -74,6 +74,7 @@ tbody tr:last-child td{border-bottom:0}
 <div class="aksi">
   <button type="button" class="mini utama" onclick="bukaCetak('{{ route('admin.bekal-cuti-payment-batch.print-memo', $batch->id) }}', 'Memo Internal')">Cetak Memo Internal</button>
   <button type="button" class="mini utama" onclick="bukaCetak('{{ route('admin.bekal-cuti-payment-batch.print-nota-debet', $batch->id) }}', 'Nota Debet')">Cetak Nota Debet</button>
+  <button type="button" class="mini utama" onclick="bukaCetak('{{ route('admin.bekal-cuti-payment-batch.print-lampiran-penerima', $batch->id) }}', 'Lampiran Penerima')">Cetak Lampiran Penerima</button>
 </div>
 
 <dialog id="modal-cetak" class="modal-cetak">

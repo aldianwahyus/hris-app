@@ -55,6 +55,18 @@ final class RecordCourseCompletion
                 throw new InvalidArgumentException('Kelulusan hanya dapat dicatat untuk pendaftaran yang sudah disetujui.');
             }
 
+            // TANPA guard ini, mencatat ulang kelulusan yang SUDAH tercatat
+            // (mis. HC mengulang klik/salah ketik nilai lalu mengirim ulang
+            // formulir yang sama) membangkitkan nomor sertifikat KEDUA,
+            // menyisipkan baris emp_trainings/emp_certifications GANDA, dan
+            // memberi poin gamifikasi DUA KALI untuk satu pelatihan yang
+            // sama — tidak ada constraint basis data yang mencegahnya (bug
+            // ditemukan lewat audit kode). Koreksi nilai/nomor sertifikat
+            // yang sudah tercatat bukan alur ini.
+            if ($enrollment->completion_status !== null) {
+                throw new InvalidArgumentException('Kelulusan untuk pendaftaran ini sudah pernah dicatat sebelumnya.');
+            }
+
             $now = new DateTimeImmutable;
             $certificateNumber = null;
 

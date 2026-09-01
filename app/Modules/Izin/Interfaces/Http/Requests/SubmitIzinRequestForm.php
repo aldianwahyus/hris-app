@@ -44,6 +44,9 @@ final class SubmitIzinRequestForm extends FormRequest
     {
         return [
             'attachment.required' => 'Lampiran bukti wajib diisi untuk kategori Sakit.',
+            'attachment.mimes' => 'Lampiran bukti hanya boleh berformat JPG, PNG, atau PDF.',
+            'attachment.file' => 'Lampiran bukti harus berupa berkas yang valid.',
+            'attachment.max' => 'Ukuran lampiran bukti maksimal 5 MB.',
         ];
     }
 }

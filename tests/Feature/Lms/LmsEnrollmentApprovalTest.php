@@ -6,8 +6,10 @@ namespace Tests\Feature\Lms;
 
 use App\Core\Domain\Uuid7;
 use App\Models\User;
+use App\Notifications\RequestDecided;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 /**
@@ -89,6 +91,68 @@ final class LmsEnrollmentApprovalTest extends TestCase
         $response = $this->actingAs($this->userWithNrp('2018.03.0142'))->get('/persetujuan/pelatihan');
 
         $response->assertForbidden();
+    }
+
+    /**
+     * Celah ditemukan lewat evaluasi PM/client (2026-08-27) — pola SAMA
+     * PERSIS LeaveApprovalQueueScopeTest. Pendaftaran pelatihan SATU
+     * tahap: setiap keputusan selalu final, notifikasi SELALU terkirim.
+     */
+    public function test_penolakan_menyimpan_alasan_dan_mengirim_notifikasi_ke_pemohon(): void
+    {
+        Notification::fake();
+
+        [$enrollmentId] = $this->insertEnrollment($this->employeeId('2018.03.0142'));
+
+        $this->actingAs($this->userWithNrp('2015.07.0088'))
+            ->post("/persetujuan/pelatihan/{$enrollmentId}/tolak", ['catatan' => 'Kuota batch sudah penuh oleh pendaftar lain.']);
+
+        $this->assertSame('Kuota batch sudah penuh oleh pendaftar lain.', DB::table('lms_enrollments')->where('id', $enrollmentId)->value('decision_note'));
+
+        Notification::assertSentTo(
+            $this->userWithNrp('2018.03.0142'),
+            fn (RequestDecided $n) => $n->approved === false && $n->reason === 'Kuota batch sudah penuh oleh pendaftar lain.',
+        );
+    }
+
+    public function test_setuju_mengirim_notifikasi_ke_pemohon(): void
+    {
+        Notification::fake();
+
+        [$enrollmentId] = $this->insertEnrollment($this->employeeId('2018.03.0142'));
+
+        $this->actingAs($this->userWithNrp('2015.07.0088'))
+            ->post("/persetujuan/pelatihan/{$enrollmentId}/setujui");
+
+        Notification::assertSentTo(
+            $this->userWithNrp('2018.03.0142'),
+            fn (RequestDecided $n) => $n->approved === true,
+        );
+    }
+
+    public function test_batal_saat_pending_berhasil(): void
+    {
+        $employeeId = $this->employeeId('2018.03.0142');
+        [$enrollmentId] = $this->insertEnrollment($employeeId);
+
+        $response = $this->actingAs($this->userWithNrp('2018.03.0142'))
+            ->post("/pelatihan/{$enrollmentId}/batal");
+
+        $response->assertRedirect();
+        $this->assertSame('cancelled', DB::table('lms_enrollments')->where('id', $enrollmentId)->value('status'));
+    }
+
+    public function test_batal_gagal_setelah_diputus(): void
+    {
+        [$enrollmentId] = $this->insertEnrollment($this->employeeId('2018.03.0142'));
+        DB::table('lms_enrollments')->where('id', $enrollmentId)->update(['status' => 'approved']);
+
+        $response = $this->actingAs($this->userWithNrp('2018.03.0142'))
+            ->post("/pelatihan/{$enrollmentId}/batal");
+
+        $response->assertRedirect();
+        $response->assertSessionHas('gagal');
+        $this->assertSame('approved', DB::table('lms_enrollments')->where('id', $enrollmentId)->value('status'));
     }
 
     /** @return array{0: string, 1: string} [enrollmentId, enrollmentNumber] */

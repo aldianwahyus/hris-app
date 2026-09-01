@@ -76,6 +76,7 @@ tbody tr:last-child td{border-bottom:0}
   <button type="button" class="mini utama" onclick="bukaCetak('{{ route('admin.overtime-payment-batch.print-memo', $batch->id) }}', 'Memo Internal')">Cetak Memo Internal</button>
   <button type="button" class="mini utama" onclick="bukaCetak('{{ route('admin.overtime-payment-batch.print-nota-debet', $batch->id) }}', 'Nota Debet')">Cetak Nota Debet</button>
   <button type="button" class="mini utama" onclick="bukaCetak('{{ route('admin.overtime-payment-batch.print-jurnal-slip', $batch->id) }}', 'Jurnal Slip Pajak')">Cetak Jurnal Slip Pajak</button>
+  <button type="button" class="mini utama" onclick="bukaCetak('{{ route('admin.overtime-payment-batch.print-lampiran-penerima', $batch->id) }}', 'Lampiran Penerima')">Cetak Lampiran Penerima</button>
 </div>
 
 <dialog id="modal-cetak" class="modal-cetak">

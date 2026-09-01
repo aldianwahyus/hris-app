@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Interfaces\Http\Controllers;
 
+use App\Models\User;
 use App\Modules\Access\Contracts\CurrentActor;
 use App\Modules\Access\Domain\AccessPolicy;
 use App\Modules\Access\Domain\OrganizationalScope;
 use App\Modules\Access\Domain\Role;
 use App\Modules\Employee\Contracts\EmployeeRepository;
+use App\Notifications\RequestDecided;
+use DateTimeImmutable;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -53,7 +57,7 @@ final class ApprovalQueueController extends Controller
     {
         $this->assertHasAnyRelevantRole();
 
-        $today = new \DateTimeImmutable('today');
+        $today = new DateTimeImmutable('today');
 
         $rows = DB::table('ovt_requests as r')
             ->join('emp_employees as e', 'e.id', '=', 'r.employee_id')
@@ -76,7 +80,7 @@ final class ApprovalQueueController extends Controller
                     && $policy->canAccessRecord($row->office_id, $row->employee_id, $this->actor->employeeId());
             })
             ->map(function ($row) use ($today) {
-                $deadline = new \DateTimeImmutable($row->approval_deadline);
+                $deadline = new DateTimeImmutable($row->approval_deadline);
                 $remaining = (int) $today->diff($deadline)->format('%r%a');
 
                 $row->remaining_days = $remaining;
@@ -104,7 +108,7 @@ final class ApprovalQueueController extends Controller
     /** Untuk badge notifikasi sidebar (ComputeNavigationBadgeCounts) — query+filter SAMA seperti index(), hanya count. */
     public function pendingCount(): int
     {
-        if (! ($this->actor->hasRole(Role::AtasanLangsung->value) || $this->actor->hasRole(Role::PimpinanKantor->value) || $this->actor->hasRole(Role::Auditor->value))) {
+        if (! $this->actor->hasPermission('overtime-approval.view')) {
             return 0;
         }
 
@@ -123,19 +127,21 @@ final class ApprovalQueueController extends Controller
 
     public function approve(string $id): RedirectResponse
     {
-        return $this->decide($id, 'approve', 'Pengajuan lembur disetujui.');
+        return $this->decide($id, 'approve', 'Pengajuan lembur disetujui.', null);
     }
 
-    public function reject(string $id): RedirectResponse
+    public function reject(string $id, Request $request): RedirectResponse
     {
-        return $this->decide($id, 'reject', 'Pengajuan lembur ditolak.');
+        $note = $request->string('catatan')->toString();
+
+        return $this->decide($id, 'reject', 'Pengajuan lembur ditolak.', $note !== '' ? $note : null);
     }
 
-    private function decide(string $id, string $decision, string $successMessage): RedirectResponse
+    private function decide(string $id, string $decision, string $successMessage, ?string $note): RedirectResponse
     {
         $request = DB::table('ovt_requests as r')
             ->join('emp_employees as e', 'e.id', '=', 'r.employee_id')
-            ->select('r.id', 'r.status', 'r.atasan_approver_id', 'e.id as employee_id', 'e.office_id')
+            ->select('r.id', 'r.spkl_number', 'r.status', 'r.atasan_approver_id', 'r.planned_hours', 'r.work_date', 'e.id as employee_id', 'e.office_id')
             ->where('r.id', $id)
             ->first();
 
@@ -160,9 +166,13 @@ final class ApprovalQueueController extends Controller
 
         $now = now();
         $updates = ['updated_at' => $now];
+        // Notifikasi HANYA pada keputusan FINAL — tolak (tahap mana pun,
+        // selalu final untuk Lembur, sama seperti Cuti) atau setuju tahap
+        // PIMPINAN (tahap atasan hanya transisi antara).
+        $isFinalDecision = $decision === 'reject' || $tier === 'pimpinan';
 
         if ($decision === 'reject') {
-            $updates += ['status' => 'rejected', 'approver_id' => $this->actor->employeeId(), 'decided_at' => $now];
+            $updates += ['status' => 'rejected', 'approver_id' => $this->actor->employeeId(), 'decided_at' => $now, 'decision_note' => $note];
         } elseif ($tier === 'atasan') {
             $updates += ['status' => 'pending_pimpinan', 'atasan_approver_id' => $this->actor->employeeId(), 'atasan_decided_at' => $now];
         } else {
@@ -174,11 +184,38 @@ final class ApprovalQueueController extends Controller
             ->where('status', $request->status)
             ->update($updates);
 
+        // Ditolak = jam yang dipesan (pending_hours) tidak lagi terpakai —
+        // tanpa ini plafon 18 jam/minggu pegawai tetap terkunci SELAMANYA
+        // oleh pengajuan yang sudah ditolak (bug ditemukan lewat audit
+        // kode, cermin releaseWeeklyOvertimeQuota() di
+        // ProcessWorkflowSla::expireInstance() untuk jalur kedaluwarsa SLA).
+        if ($affected > 0 && $decision === 'reject' && $request->planned_hours !== null) {
+            $sevenDaysBefore = (new DateTimeImmutable($request->work_date))->modify('-7 days')->format('Y-m-d');
+
+            DB::table('ovt_weekly_quotas')
+                ->where('employee_id', $request->employee_id)
+                ->where('week_start_date', '<=', $request->work_date)
+                ->where('week_start_date', '>', $sevenDaysBefore)
+                ->decrement('pending_hours', (float) $request->planned_hours);
+        }
+
+        if ($affected > 0 && $isFinalDecision) {
+            $this->notifyRequester($request->employee_id, $request->spkl_number, $decision === 'approve', $note);
+        }
+
         return redirect()
             ->route('admin.approval-queue')
             ->with($affected > 0 ? 'sukses' : 'gagal', $affected > 0
                 ? $successMessage
                 : 'Pengajuan sudah diputus sebelumnya.');
+    }
+
+    /** Melewati pengiriman bila pegawai tidak (lagi) punya akun login — bukan kondisi yang perlu menggagalkan keputusan. */
+    private function notifyRequester(string $employeeId, string $spklNumber, bool $approved, ?string $reason): void
+    {
+        $user = User::query()->where('employee_id', $employeeId)->first();
+
+        $user?->notify(new RequestDecided($spklNumber, 'lembur', $approved, $reason));
     }
 
     /** @return 'atasan'|'pimpinan'|null */
@@ -223,10 +260,14 @@ final class ApprovalQueueController extends Controller
 
     private function assertHasAnyRelevantRole(): void
     {
+        // Gerbang akses SESUNGGUHNYA sudah middleware `permission:overtime-approval.view`
+        // di routes/web.php (dibaca dari role_has_permissions, diatur lewat Peta Peran —
+        // lihat RoleFeatureMapController). Cek di sini HANYA cermin permission itu (bukan
+        // daftar role hardcode terpisah) — kalau tidak, permission yang diberikan ke role
+        // BARU lewat Peta Peran akan lolos middleware rute tapi tetap "Akses Ditolak" di
+        // sini (bug nyata yang pernah terjadi).
         abort_unless(
-            $this->actor->hasRole(Role::AtasanLangsung->value)
-                || $this->actor->hasRole(Role::PimpinanKantor->value)
-                || $this->actor->hasRole(Role::Auditor->value),
+            $this->actor->hasPermission('overtime-approval.view'),
             403,
             'Anda tidak memiliki peran yang berwenang melihat antrean ini.'
         );

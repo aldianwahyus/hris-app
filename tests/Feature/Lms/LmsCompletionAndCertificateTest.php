@@ -84,6 +84,44 @@ final class LmsCompletionAndCertificateTest extends TestCase
         $this->assertNull(DB::table('lms_enrollments')->where('id', $enrollmentId)->value('completion_status'));
     }
 
+    /**
+     * Regresi (bug ditemukan lewat audit kode): handle() sebelumnya HANYA
+     * memeriksa status === 'approved', tidak pernah memeriksa apakah
+     * completion_status SUDAH tercatat — mencatat ulang (mis. HC salah
+     * ketik nilai lalu mengirim ulang formulir yang sama) membangkitkan
+     * nomor sertifikat KEDUA, baris emp_trainings/emp_certifications
+     * GANDA, dan poin gamifikasi dua kali untuk satu pelatihan yang sama.
+     */
+    public function test_kelulusan_yang_sudah_tercatat_tidak_dapat_dicatat_ulang(): void
+    {
+        $employeeId = $this->employeeId('2018.03.0142');
+        $enrollmentId = $this->insertEnrollment($employeeId, 'approved');
+
+        $this->actingAs($this->userWithNrp('2021.05.0302'))
+            ->post("/admin/pelatihan/pendaftaran/{$enrollmentId}/kelulusan", [
+                'completion_status' => 'lulus',
+                'score' => '85',
+            ]);
+
+        $certificateNumberFirst = DB::table('lms_enrollments')->where('id', $enrollmentId)->value('certificate_number');
+
+        $response = $this->actingAs($this->userWithNrp('2021.05.0302'))
+            ->post("/admin/pelatihan/pendaftaran/{$enrollmentId}/kelulusan", [
+                'completion_status' => 'lulus',
+                'score' => '95',
+            ]);
+
+        $response->assertSessionHas('gagal');
+
+        $enrollment = DB::table('lms_enrollments')->where('id', $enrollmentId)->first();
+        $this->assertSame($certificateNumberFirst, $enrollment->certificate_number, 'Nomor sertifikat tidak boleh berubah dari percobaan kedua.');
+        $this->assertEquals(85.0, $enrollment->score, 'Nilai tidak boleh tertimpa oleh percobaan pencatatan ulang.');
+
+        $this->assertSame(1, DB::table('emp_trainings')->where('employee_id', $employeeId)->where('training_name', 'Kursus Uji')->count(), 'Tidak boleh ada baris emp_trainings ganda.');
+        $this->assertSame(1, DB::table('emp_certifications')->where('employee_id', $employeeId)->where('certification_name', 'Kursus Uji')->count(), 'Tidak boleh ada baris emp_certifications ganda.');
+        $this->assertSame(1, DB::table('lms_gamification_points')->where('source_type', 'lms_enrollment')->where('source_id', $enrollmentId)->count(), 'Poin gamifikasi tidak boleh diberikan dua kali.');
+    }
+
     public function test_pemilik_dapat_mengunduh_sertifikat_pdf_setelah_lulus(): void
     {
         $siti = $this->userWithNrp('2018.03.0142');

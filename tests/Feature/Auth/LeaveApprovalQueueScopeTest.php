@@ -8,10 +8,12 @@ use App\Core\Domain\Uuid7;
 use App\Models\User;
 use App\Modules\Leave\Application\SubmitLeaveRequest;
 use App\Modules\Leave\Domain\LeaveType;
+use App\Notifications\RequestDecided;
 use App\Shared\Audit\Domain\AuditActor;
 use DateTimeImmutable;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 /**
@@ -146,6 +148,65 @@ final class LeaveApprovalQueueScopeTest extends TestCase
 
         $response->assertForbidden();
         $this->assertSame('pending_pimpinan', DB::table('leave_requests')->where('id', $requestId)->value('status'));
+    }
+
+    /**
+     * Celah ditemukan lewat evaluasi PM/client (2026-08-27): pegawai yang
+     * ditolak tidak pernah tahu kenapa. Sekarang alasan WAJIB tersimpan
+     * di decision_note DAN terkirim ke pemohon lewat RequestDecided —
+     * penolakan di tahap MANA PUN selalu final untuk Cuti.
+     */
+    public function test_penolakan_menyimpan_alasan_dan_mengirim_notifikasi_ke_pemohon(): void
+    {
+        Notification::fake();
+
+        $requestId = $this->insertLeaveRequest($this->employeeId('2018.03.0142'), 'pending'); // Siti, KC Mataram
+
+        $response = $this->actingAs($this->userWithNrp('2015.07.0088'))
+            ->post("/persetujuan/cuti/{$requestId}/tolak", ['catatan' => 'Bulan ini masih peak season cabang.']);
+
+        $response->assertRedirect(route('admin.leave-approval-queue'));
+
+        $row = DB::table('leave_requests')->where('id', $requestId)->first();
+        $this->assertSame('rejected', $row->status);
+        $this->assertSame('Bulan ini masih peak season cabang.', $row->decision_note);
+
+        Notification::assertSentTo(
+            $this->userWithNrp('2018.03.0142'),
+            fn (RequestDecided $n) => $n->approved === false && $n->reason === 'Bulan ini masih peak season cabang.',
+        );
+    }
+
+    /** Setuju tahap Atasan Langsung hanya TRANSISI ke tahap Pimpinan — belum keputusan akhir, jadi belum boleh memberi tahu pemohon. */
+    public function test_setuju_tahap_atasan_belum_final_tidak_mengirim_notifikasi(): void
+    {
+        Notification::fake();
+
+        $requestId = $this->insertLeaveRequest($this->employeeId('2018.03.0142'), 'pending');
+
+        $this->actingAs($this->userWithNrp('2015.07.0088'))
+            ->post("/persetujuan/cuti/{$requestId}/setujui");
+
+        Notification::assertNothingSent();
+    }
+
+    public function test_setuju_tahap_pimpinan_final_mengirim_notifikasi_ke_pemohon(): void
+    {
+        Notification::fake();
+
+        $requestId = $this->insertLeaveRequest(
+            $this->employeeId('2018.03.0142'),
+            'pending_pimpinan',
+            atasanApproverId: (string) Uuid7::generate(),
+        );
+
+        $this->actingAs($this->userWithNrp('2015.07.0088')) // Ahmad, pimpinan_kantor KC Mataram
+            ->post("/persetujuan/cuti/{$requestId}/setujui");
+
+        Notification::assertSentTo(
+            $this->userWithNrp('2018.03.0142'),
+            fn (RequestDecided $n) => $n->approved === true,
+        );
     }
 
     private function insertLeaveRequest(string $employeeId, string $status, ?string $atasanApproverId = null): string

@@ -34,10 +34,12 @@ final class LmsEnrollmentApprovalController extends Controller
 
     public function index(): View
     {
-        $isAtasanLangsung = $this->actor->hasRole(Role::AtasanLangsung->value);
-        $isAuditor = $this->actor->hasRole(Role::Auditor->value);
-
-        abort_unless($isAtasanLangsung || $isAuditor, 403, 'Anda tidak memiliki peran yang berwenang melihat antrean ini.');
+        // Gerbang akses SESUNGGUHNYA sudah middleware
+        // `permission:lms-enrollment-approval.view` di routes/web.php (diatur lewat
+        // Peta Peran) — cek di sini cermin permission itu, BUKAN daftar role
+        // hardcode terpisah (lihat catatan sama di
+        // ApprovalQueueController::assertHasAnyRelevantRole()).
+        abort_unless($this->actor->hasPermission('lms-enrollment-approval.view'), 403, 'Anda tidak memiliki peran yang berwenang melihat antrean ini.');
 
         $rows = DB::table('lms_enrollments as en')
             ->join('emp_employees as e', 'e.id', '=', 'en.employee_id')
@@ -60,7 +62,7 @@ final class LmsEnrollmentApprovalController extends Controller
     /** Untuk badge notifikasi sidebar (ComputeNavigationBadgeCounts) — query+filter SAMA seperti index(), hanya count. */
     public function pendingCount(): int
     {
-        if (! ($this->actor->hasRole(Role::AtasanLangsung->value) || $this->actor->hasRole(Role::Auditor->value))) {
+        if (! $this->actor->hasPermission('lms-enrollment-approval.view')) {
             return 0;
         }
 
@@ -85,6 +87,8 @@ final class LmsEnrollmentApprovalController extends Controller
 
     private function decideEnrollment(Request $request, string $id, string $action, string $successMessage): RedirectResponse
     {
+        $note = $request->string('catatan')->toString();
+        $note = $note !== '' ? $note : null;
         $enrollment = DB::table('lms_enrollments as en')
             ->join('emp_employees as e', 'e.id', '=', 'en.employee_id')
             ->select('en.id', 'en.status', 'e.id as employee_id', 'e.office_id')
@@ -112,7 +116,11 @@ final class LmsEnrollmentApprovalController extends Controller
             userAgent: $request->userAgent(),
         );
 
-        $this->decide->{$action}($id, (string) $actorEmployeeId, $actorInfo);
+        if ($action === 'reject') {
+            $this->decide->reject($id, (string) $actorEmployeeId, $actorInfo, $note);
+        } else {
+            $this->decide->approve($id, (string) $actorEmployeeId, $actorInfo);
+        }
 
         return redirect()->route('admin.lms-enrollment-queue')->with('sukses', $successMessage);
     }

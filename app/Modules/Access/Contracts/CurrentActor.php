@@ -23,4 +23,6 @@ interface CurrentActor
     public function roles(): array;
 
     public function hasRole(string $role): bool;
+
+    public function hasPermission(string $permission): bool;
 }

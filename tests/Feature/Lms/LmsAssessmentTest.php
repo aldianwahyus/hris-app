@@ -99,6 +99,64 @@ final class LmsAssessmentTest extends TestCase
         $this->assertEquals(5.0, $attempt->total_score); // 1.0 (MC) + 4.0 (esai)
     }
 
+    /**
+     * Regresi (bug ditemukan lewat audit kode): handle() sebelumnya tidak
+     * pernah membandingkan assessorId dengan attempt->employee_id — siapa
+     * pun yang punya izin lms-catalog.manage (mis. hr_admin) bisa
+     * mengerjakan asesmen sebagai pegawai ESS lalu meluluskan dirinya
+     * sendiri tanpa peninjauan independen sama sekali.
+     */
+    public function test_penilai_tidak_dapat_menilai_pengerjaannya_sendiri(): void
+    {
+        $assessmentId = $this->seedAssessment();
+        $essayQuestionId = $this->seedEssayQuestion($assessmentId, 1, 5.0);
+
+        $hrAdmin = $this->hrAdmin();
+        $this->actingAs($hrAdmin)->post("/pelatihan/asesmen/{$assessmentId}/mulai");
+        $attemptId = DB::table('lms_assessment_attempts')->where('assessment_id', $assessmentId)->where('employee_id', $hrAdmin->employee_id)->value('id');
+
+        $this->actingAs($hrAdmin)->post("/pelatihan/asesmen/kerjakan/{$attemptId}", [
+            'jawaban' => [$essayQuestionId => 'Jawaban esai saya sendiri.'],
+        ]);
+
+        $this->assertSame('submitted', DB::table('lms_assessment_attempts')->where('id', $attemptId)->value('status'));
+
+        $response = $this->actingAs($hrAdmin)->post("/admin/pelatihan/asesmen/percobaan/{$attemptId}/nilai", [
+            'skor' => [$essayQuestionId => 5],
+        ]);
+
+        $response->assertSessionHas('gagal');
+        $this->assertSame('submitted', DB::table('lms_assessment_attempts')->where('id', $attemptId)->value('status'), 'Percobaan tidak boleh berubah jadi scored oleh penilaian diri sendiri.');
+    }
+
+    /**
+     * Regresi (bug ditemukan lewat audit kode): validasi HANYA memeriksa
+     * min:0, tidak pernah memeriksa terhadap score_weight soal — atribut
+     * "max" pada input HTML cuma kosmetik sisi klien, bisa dilewati lewat
+     * POST langsung, sehingga skor total (dan status lulus) bisa
+     * digelembungkan melebihi bobot soal yang sebenarnya.
+     */
+    public function test_skor_esai_tidak_boleh_melebihi_bobot_soal(): void
+    {
+        $assessmentId = $this->seedAssessment();
+        $essayQuestionId = $this->seedEssayQuestion($assessmentId, 1, 5.0);
+
+        $siti = $this->userWithNrp('2018.03.0142');
+        $this->actingAs($siti)->post("/pelatihan/asesmen/{$assessmentId}/mulai");
+        $attemptId = DB::table('lms_assessment_attempts')->where('assessment_id', $assessmentId)->where('employee_id', $siti->employee_id)->value('id');
+
+        $this->actingAs($siti)->post("/pelatihan/asesmen/kerjakan/{$attemptId}", [
+            'jawaban' => [$essayQuestionId => 'Jawaban esai saya.'],
+        ]);
+
+        $response = $this->actingAs($this->hrAdmin())->post("/admin/pelatihan/asesmen/percobaan/{$attemptId}/nilai", [
+            'skor' => [$essayQuestionId => 100], // bobot soal cuma 5.0
+        ]);
+
+        $response->assertSessionHas('gagal');
+        $this->assertSame('submitted', DB::table('lms_assessment_attempts')->where('id', $attemptId)->value('status'), 'Percobaan tidak boleh ternilai dengan skor melebihi bobot soal.');
+    }
+
     public function test_peran_lain_ditolak_dari_admin_asesmen(): void
     {
         $response = $this->actingAs($this->userWithNrp('2015.07.0088'))->get('/admin/pelatihan/asesmen');

@@ -95,6 +95,53 @@ final class PayrollBulkGenerationTest extends TestCase
         );
     }
 
+    /**
+     * Celah ditemukan lewat evaluasi PM/client (2026-08-27): satu pegawai
+     * tanpa baris skala imbalan kerja yang valid (SalaryStepNotFound)
+     * dulu menggagalkan SELURUH transaksi per-kantor — pegawai LAIN di
+     * kantor yang sama ikut tidak mendapat slip. Sekarang pegawai
+     * bermasalah DILEWATI saja, dikumpulkan ke $failedEmployees.
+     */
+    public function test_pegawai_tanpa_skala_gaji_valid_dilewati_tanpa_menggagalkan_pegawai_lain_di_kantor_sama(): void
+    {
+        $officeId = DB::table('emp_employees')->where('nrp', '2018.03.0142')->value('office_id');
+
+        // Hendra (PG2 step1) — set ke step yang tidak pernah disemai di
+        // pay_salary_scale (99) supaya SalaryStepNotFound pasti terpicu.
+        DB::table('emp_employees')->where('nrp', '2017.11.0119')->update(['salary_step' => 99]);
+
+        $failedEmployees = null;
+        $runId = app(RunPayrollDraft::class)->handle(
+            officeId: $officeId,
+            period: new DateTimeImmutable('2027-04-01'),
+            actor: new AuditActor(actorId: $this->employeeId('2015.07.0088'), actorRole: 'hr_admin'),
+            failedEmployees: $failedEmployees,
+        );
+
+        $this->assertNotNull($runId);
+        $this->assertCount(1, $failedEmployees);
+        $this->assertSame('Hendra Wijaya', $failedEmployees[0]['name']);
+
+        $slipEmployeeIds = DB::table('pay_payslips')->where('payroll_run_id', $runId)->pluck('employee_id')->all();
+        $this->assertContains($this->employeeId('2018.03.0142'), $slipEmployeeIds, 'Siti tetap harus dapat slip.');
+        $this->assertContains($this->employeeId('2015.07.0088'), $slipEmployeeIds, 'Ahmad tetap harus dapat slip.');
+        $this->assertNotContains($this->employeeId('2017.11.0119'), $slipEmployeeIds, 'Hendra (skala gaji tidak valid) tidak boleh dapat slip.');
+    }
+
+    public function test_generate_massal_menampilkan_ringkasan_pegawai_yang_gagal_bukan_pesan_generik(): void
+    {
+        DB::table('emp_employees')->where('nrp', '2017.11.0119')->update(['salary_step' => 99]);
+
+        $response = $this->actingAs($this->userWithNrp('2014.02.0061'))->post('/persetujuan/payroll/generate-massal', [
+            'period' => '2027-05',
+        ]);
+
+        $response->assertRedirect(route('admin.payroll-approval-queue'));
+        $response->assertSessionHas('sukses');
+        $this->assertStringContainsString('Hendra Wijaya', session('sukses'));
+        $this->assertStringContainsString('pegawai gagal dibuatkan slip', session('sukses'));
+    }
+
     private function employeeId(string $nrp): string
     {
         return DB::table('emp_employees')->where('nrp', $nrp)->value('id');

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
-         bootstrap="vendor/autoload.php"
+         bootstrap="tests/bootstrap.php"
          colors="true"
          failOnWarning="true"
          failOnRisky="true">
@@ -24,13 +24,14 @@
         </include>
     </source>
     <php>
-        <!-- force="true" WAJIB — docker-compose.yml menyetel APP_ENV=local
-             sebagai environment variable kontainer sungguhan untuk service
-             app/horizon; tanpa force, PHPUnit TIDAK menimpa env yang sudah
-             ada di proses (hanya mengisi yang belum ada), sehingga seluruh
-             override di bawah ini diam-diam diabaikan — test berjalan
-             dengan APP_ENV=local di database hris (BUKAN hris_testing) dan
-             kehilangan bypass CSRF/queue/cache khusus testing Laravel. -->
+        <!-- force="true" TIDAK CUKUP di sini — docker-compose.yml membakukan
+             APP_ENV=local/DB_DATABASE=hris dkk. LANGSUNG ke $_ENV/$_SERVER
+             kontainer sebelum PHP jalan; putenv() milik PHPUnit tidak
+             pernah menimpa keduanya. Nilai yang SUNGGUHAN dipaksakan lewat
+             tests/bootstrap.php (bootstrap="tests/bootstrap.php" di atas),
+             SEBELUM vendor/autoload.php/Dotenv sempat membaca apa pun.
+             Baris <env> di bawah ini dipertahankan murni sebagai dokumentasi
+             nilai yang dipakai — bukan mekanisme yang benar-benar bekerja. -->
         <env name="APP_ENV" value="testing" force="true"/>
         <env name="DB_CONNECTION" value="pgsql" force="true"/>
         <env name="DB_DATABASE" value="hris_testing" force="true"/>

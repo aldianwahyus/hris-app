@@ -12,6 +12,17 @@
 .baca{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--garis);font-size:12.5px}
 .baca:last-child{border-bottom:0}
 .baca .l{color:var(--teks-lemah)}
+.foto-baris{display:flex;align-items:center;gap:16px}
+.foto-bulat{width:84px;height:84px;border-radius:50%;object-fit:cover;
+  background:var(--latar);border:1px solid var(--garis)}
+.foto-placeholder{width:84px;height:84px;border-radius:50%;background:var(--hijau-muda);
+  color:var(--hijau-tua);display:flex;align-items:center;justify-content:center;
+  font-size:26px;font-weight:800;border:1px solid var(--garis)}
+.foto-aksi{display:flex;flex-direction:column;gap:8px}
+.foto-aksi .baris{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.foto-ket{font-size:11px;color:var(--teks-lemah)}
+.foto-hapus{background:none;border:none;color:var(--merah);font-size:12px;font-weight:700;
+  cursor:pointer;padding:0;font-family:inherit}
 @endsection
 
 @section('isi')
@@ -19,6 +30,37 @@
   <h2>CV Saya</h2>
   <p>Data organisasi (jabatan/kantor/grade) hanya-baca — perubahannya lewat Admin SDM. Data pribadi di bawah bisa Anda ubah sendiri, langsung tersimpan.</p>
   <a href="{{ route('ess.cv.pdf') }}" class="btn luar" style="display:inline-block;margin-top:10px;text-decoration:none">Unduh PDF</a>
+</div>
+
+@if ($errors->hasBag('photo'))
+  <div class="pesan gagal">{{ $errors->getBag('photo')->first() }}</div>
+@endif
+
+<div class="kartu">
+  <div class="kartu-judul">Foto Profil</div>
+  <div class="foto-baris">
+    @if ($employee->photo_path)
+      <img src="{{ route('ess.cv.photo') }}" alt="Foto {{ $employee->full_name }}" class="foto-bulat">
+    @else
+      <div class="foto-placeholder">{{ strtoupper(substr($employee->full_name, 0, 1)) }}</div>
+    @endif
+
+    <div class="foto-aksi">
+      <form method="POST" action="{{ route('ess.cv.photo.update') }}" enctype="multipart/form-data" class="baris">
+        @csrf
+        <input type="file" name="photo" accept=".jpg,.jpeg,.png" required>
+        <button type="submit" class="btn" style="padding:8px 14px">Unggah</button>
+      </form>
+      <span class="foto-ket">JPG atau PNG, maks 2 MB.</span>
+      @if ($employee->photo_path)
+        <form method="POST" action="{{ route('ess.cv.photo.destroy') }}" data-confirm="Hapus foto profil?">
+          @csrf
+          @method('DELETE')
+          <button type="submit" class="foto-hapus">Hapus foto</button>
+        </form>
+      @endif
+    </div>
+  </div>
 </div>
 
 <div class="kartu">

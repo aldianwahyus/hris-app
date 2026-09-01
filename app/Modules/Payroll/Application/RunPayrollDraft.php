@@ -11,6 +11,7 @@ use App\Modules\Payroll\Domain\PayrollRunAlreadyExists;
 use App\Modules\Payroll\Domain\Pph21Calculator;
 use App\Modules\Payroll\Domain\Pph21Golongan;
 use App\Modules\Payroll\Domain\SalaryScaleRepository;
+use App\Modules\Payroll\Domain\SalaryStepNotFound;
 use App\Modules\Payroll\Domain\TerRateNotFound;
 use App\Shared\Audit\Domain\AuditAction;
 use App\Shared\Audit\Domain\AuditActor;
@@ -42,13 +43,23 @@ final class RunPayrollDraft
         private readonly Pph21Calculator $pph21,
     ) {}
 
-    public function handle(string $officeId, DateTimeImmutable $period, AuditActor $actor): string
+    /**
+     * @param  array<int, array{name: string, reason: string}>|null  $failedEmployees  Nilai
+     *                                                                                 masukan diabaikan sepenuhnya — SELALU ditimpa di awal method.
+     *
+     * @param-out  array<int, array{name: string, reason: string}>  $failedEmployees  Diisi
+     *   BALIK (by-reference) dengan pegawai yang DILEWATI. Opsional:
+     *   pemanggil yang tidak butuh daftarnya (mis. test lama) boleh
+     *   mengabaikannya sepenuhnya.
+     */
+    public function handle(string $officeId, DateTimeImmutable $period, AuditActor $actor, ?array &$failedEmployees = null): string
     {
+        $failedEmployees = [];
         $periodStart = new DateTimeImmutable($period->format('Y-m-01'));
         $periodDate = $periodStart->format('Y-m-d');
         $asOf = AsOfDate::on($periodStart);
 
-        return DB::transaction(function () use ($officeId, $periodDate, $asOf, $actor) {
+        return DB::transaction(function () use ($officeId, $periodDate, $asOf, $actor, &$failedEmployees) {
             $exists = DB::table('pay_payroll_runs')
                 ->where('office_id', $officeId)
                 ->where('period', $periodDate)
@@ -89,14 +100,28 @@ final class RunPayrollDraft
                 ->where('employment_status', 'tetap')
                 ->whereNotNull('person_grade')
                 ->get([
-                    'id', 'person_grade', 'salary_step', 'tunjangan_jabatan_cents', 'tunjangan_penyesuaian_cents',
+                    'id', 'full_name', 'person_grade', 'salary_step', 'tunjangan_jabatan_cents', 'tunjangan_penyesuaian_cents',
                     'marital_status', 'tanggungan',
                 ]);
 
             $slipCount = 0;
 
             foreach ($employees as $employee) {
-                $imbalanKerja = $this->salaryScale->amountFor((int) $employee->person_grade, (int) $employee->salary_step, $asOf);
+                // Satu pegawai tanpa baris skala imbalan kerja yang valid
+                // (mis. Person Grade/baris menunggu Lampiran II) TIDAK
+                // BOLEH menggagalkan SELURUH transaksi per-kantor — bug
+                // ditemukan lewat evaluasi PM/client, pegawai ini DILEWATI
+                // (bukan menghentikan slip pegawai lain di kantor yang
+                // sama), dikumpulkan ke $failedEmployees agar HC tahu
+                // persis siapa dan kenapa, bukan menebak dari galat generik.
+                try {
+                    $imbalanKerja = $this->salaryScale->amountFor((int) $employee->person_grade, (int) $employee->salary_step, $asOf);
+                } catch (SalaryStepNotFound $e) {
+                    $failedEmployees[] = ['name' => $employee->full_name, 'reason' => $e->getMessage()];
+
+                    continue;
+                }
+
                 $components = $calculator->compute(
                     $imbalanKerja,
                     Money::fromCents((int) $employee->tunjangan_jabatan_cents),

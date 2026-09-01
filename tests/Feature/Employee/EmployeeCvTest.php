@@ -6,7 +6,9 @@ namespace Tests\Feature\Employee;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -60,6 +62,53 @@ final class EmployeeCvTest extends TestCase
         $this->assertNotNull($audit);
     }
 
+    /**
+     * Regresi (bug ditemukan lewat audit kode): UpdateOwnPersonalDetails
+     * sebelumnya menjalankan UPDATE ... WHERE version = $stale TANPA
+     * memeriksa jumlah baris terdampak — kalau version sudah berubah
+     * duluan (mis. approval data organisasi menaikkan version di antara
+     * baca dan tulis), UPDATE itu mencocokkan 0 baris, TIDAK melakukan
+     * apa pun, tapi kode tetap menulis audit trail "berhasil" dan
+     * redirect sukses — perubahan pegawai hilang diam-diam.
+     */
+    public function test_perubahan_ditolak_jika_versi_data_sudah_berubah_sejak_dibaca(): void
+    {
+        $siti = $this->userWithNrp('2018.03.0142');
+
+        // UpdateOwnPersonalDetails::handle() membaca $current SEKALI lalu
+        // memakai version itu untuk WHERE klausa UPDATE-nya — menaikkan
+        // version SEBELUM permintaan dikirim tidak menguji apa pun (kelas
+        // itu akan membaca version yang SUDAH naik dan tetap cocok).
+        // Race sungguhan hanya terjadi ANTARA baca dan tulisnya SENDIRI,
+        // jadi disimulasikan lewat DB::listen(): begitu SELECT pertama
+        // kelas itu selesai (mendapati version LAMA), suntikkan UPDATE
+        // mentah yang menaikkan version — persis proses lain yang
+        // menyelesaikan tulisannya duluan di sela-sela permintaan ini.
+        DB::listen(function ($query) use ($siti) {
+            if (str_contains($query->sql, 'select * from "emp_employees" where "id" = ?')
+                && ($query->bindings[0] ?? null) === $siti->employee_id) {
+                DB::table('emp_employees')->where('id', $siti->employee_id)->increment('version');
+            }
+        });
+
+        $response = $this->actingAs($siti)->post('/cv-saya', [
+            'alamat' => 'Jl. Basi No. 1, Mataram',
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('gagal');
+
+        $employee = DB::table('emp_employees')->where('id', $siti->employee_id)->first();
+        $this->assertNotSame('Jl. Basi No. 1, Mataram', $employee->alamat, 'Perubahan tidak boleh tersimpan saat konflik versi.');
+
+        $audit = DB::table('aud_change_logs')
+            ->where('auditable_type', 'employee_personal_details')
+            ->where('auditable_id', $siti->employee_id)
+            ->where('new_values', 'like', '%Basi%')
+            ->first();
+        $this->assertNull($audit, 'Tidak boleh ada entri audit "berhasil" untuk perubahan yang sebenarnya gagal.');
+    }
+
     public function test_field_organisasi_tidak_bisa_diubah_lewat_cv_saya(): void
     {
         $siti = $this->userWithNrp('2018.03.0142');
@@ -96,6 +145,90 @@ final class EmployeeCvTest extends TestCase
         $this->assertNull($employee->nomor_ktp);
         $this->assertNull($employee->agama);
         $this->assertSame('Alamat baru', $employee->alamat);
+    }
+
+    public function test_pegawai_dapat_mengunggah_foto_profil_langsung_tanpa_persetujuan(): void
+    {
+        Storage::fake('s3');
+        $siti = $this->userWithNrp('2018.03.0142');
+
+        $response = $this->actingAs($siti)->post('/cv-saya/foto', [
+            'photo' => UploadedFile::fake()->image('foto-siti.jpg'),
+        ]);
+
+        $response->assertRedirect(route('ess.cv'));
+        $response->assertSessionHas('sukses');
+
+        $photoPath = DB::table('emp_employees')->where('id', $siti->employee_id)->value('photo_path');
+        $this->assertNotNull($photoPath);
+        Storage::disk('s3')->assertExists($photoPath);
+
+        $view = $this->actingAs($siti)->get('/cv-saya/foto');
+        $view->assertOk();
+    }
+
+    public function test_foto_format_tidak_didukung_ditolak(): void
+    {
+        Storage::fake('s3');
+        $siti = $this->userWithNrp('2018.03.0142');
+
+        $response = $this->actingAs($siti)->post('/cv-saya/foto', [
+            'photo' => UploadedFile::fake()->create('dokumen.pdf', 100, 'application/pdf'),
+        ]);
+
+        $response->assertSessionHasErrorsIn('photo', ['photo']);
+        $this->assertNull(DB::table('emp_employees')->where('id', $siti->employee_id)->value('photo_path'));
+    }
+
+    public function test_foto_melebihi_2mb_ditolak(): void
+    {
+        Storage::fake('s3');
+        $siti = $this->userWithNrp('2018.03.0142');
+
+        $response = $this->actingAs($siti)->post('/cv-saya/foto', [
+            'photo' => UploadedFile::fake()->image('besar.jpg')->size(2049),
+        ]);
+
+        $response->assertSessionHasErrorsIn('photo', ['photo']);
+        $this->assertNull(DB::table('emp_employees')->where('id', $siti->employee_id)->value('photo_path'));
+    }
+
+    public function test_pegawai_dapat_menghapus_foto_profil(): void
+    {
+        Storage::fake('s3');
+        $siti = $this->userWithNrp('2018.03.0142');
+
+        $this->actingAs($siti)->post('/cv-saya/foto', ['photo' => UploadedFile::fake()->image('foto-siti.jpg')]);
+        $photoPath = DB::table('emp_employees')->where('id', $siti->employee_id)->value('photo_path');
+
+        $response = $this->actingAs($siti)->delete('/cv-saya/foto');
+
+        $response->assertRedirect(route('ess.cv'));
+        $this->assertNull(DB::table('emp_employees')->where('id', $siti->employee_id)->value('photo_path'));
+        Storage::disk('s3')->assertMissing($photoPath);
+    }
+
+    /**
+     * Regresi: photo_path masuk whitelist SelfEditableEmployeeField (supaya
+     * UpdateOwnPersonalDetails::handle() bisa menerimanya dari
+     * updatePhoto()), TAPI form data pribadi teks (POST /cv-saya) TIDAK
+     * PERNAH menyertakan kolom ini dalam validasinya sendiri — tanpa
+     * pengecekan array_key_exists di EmployeeCvController::update(),
+     * foto yang sudah ada akan diam-diam terhapus setiap kali form teks
+     * ini disimpan.
+     */
+    public function test_menyimpan_data_pribadi_teks_tidak_menghapus_foto_yang_sudah_ada(): void
+    {
+        Storage::fake('s3');
+        $siti = $this->userWithNrp('2018.03.0142');
+
+        $this->actingAs($siti)->post('/cv-saya/foto', ['photo' => UploadedFile::fake()->image('foto-siti.jpg')]);
+        $photoPath = DB::table('emp_employees')->where('id', $siti->employee_id)->value('photo_path');
+        $this->assertNotNull($photoPath);
+
+        $this->actingAs($siti)->post('/cv-saya', ['alamat' => 'Alamat baru saja']);
+
+        $this->assertSame($photoPath, DB::table('emp_employees')->where('id', $siti->employee_id)->value('photo_path'));
     }
 
     public function test_pegawai_lain_tidak_bisa_melihat_cv_orang_lain(): void

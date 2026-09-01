@@ -17,6 +17,13 @@
 
 @section('isi')
 @forelse ($slips as $s)
+  @php
+    $deductions = $deductionsByPayslip->get($s->id, collect());
+    $additions = $additionsByPayslip->get($s->id, collect());
+    $totalDeductions = $deductions->sum('amount_cents');
+    $totalAdditions = $additions->sum('amount_cents');
+    $bersih = $s->take_home_partial_cents - $totalDeductions + $totalAdditions;
+  @endphp
   <div class="kartu">
     <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;margin-bottom:13px">
       <div class="kartu-judul" style="margin-bottom:0">Slip gaji — {{ date('F Y', strtotime($s->period)) }}</div>
@@ -29,6 +36,10 @@
       <span class="angka">Rp{{ number_format($s->tunjangan_jabatan_cents / 100, 0, ',', '.') }}</span></div>
     <div class="rincian"><span>Tunjangan Penyesuaian</span>
       <span class="angka">Rp{{ number_format($s->tunjangan_penyesuaian_cents / 100, 0, ',', '.') }}</span></div>
+    @foreach ($additions as $a)
+      <div class="rincian"><span>{{ \App\Modules\Payroll\Domain\AdditionType::from($a->addition_type)->label() }}</span>
+        <span class="angka">Rp{{ number_format($a->amount_cents / 100, 0, ',', '.') }}</span></div>
+    @endforeach
     <div class="rincian"><span>Iuran Pensiun (7%)</span>
       <span class="angka">- Rp{{ number_format($s->iuran_pensiun_pegawai_cents / 100, 0, ',', '.') }}</span></div>
     <div class="rincian"><span>Iuran THT (5%)</span>
@@ -37,8 +48,12 @@
       <div class="rincian"><span>PPh 21 (sementara, Gol. {{ $s->pph21_golongan }})</span>
         <span class="angka">- Rp{{ number_format($s->pph21_cents / 100, 0, ',', '.') }}</span></div>
     @endif
-    <div class="rincian total"><span>Sebagian (belum lengkap)</span>
-      <span class="angka">Rp{{ number_format($s->take_home_partial_cents / 100, 0, ',', '.') }}</span></div>
+    @foreach ($deductions as $d)
+      <div class="rincian"><span>{{ \App\Modules\Payroll\Domain\DeductionType::from($d->deduction_type)->label() }}</span>
+        <span class="angka">- Rp{{ number_format($d->amount_cents / 100, 0, ',', '.') }}</span></div>
+    @endforeach
+    <div class="rincian total"><span>Take Home Pay</span>
+      <span class="angka">Rp{{ number_format($bersih / 100, 0, ',', '.') }}</span></div>
 
     <div class="pending">
       Catatan penting mengenai angka di atas:

@@ -6,20 +6,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from '../components/Card';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../context/AuthContext';
+import { MobileMenuKey, useMobileMenu } from '../context/MobileMenuContext';
 import { MainStackParamList } from '../navigation/types';
 import { colors, radius, spacing, type } from '../theme';
 
-const MENU: { icon: keyof typeof Ionicons.glyphMap; label: string; description: string; route: keyof MainStackParamList }[] = [
-  { icon: 'airplane-outline', label: 'SPPD', description: 'Perjalanan dinas', route: 'Sppd' },
-  { icon: 'document-text-outline', label: 'Izin', description: 'Izin tidak masuk bekerja', route: 'Izin' },
-  { icon: 'wallet-outline', label: 'Slip Gaji', description: 'Riwayat penghasilan', route: 'SlipGaji' },
-  { icon: 'notifications-outline', label: 'Notifikasi', description: 'Pemberitahuan sistem', route: 'Notifikasi' },
+const MENU: { icon: keyof typeof Ionicons.glyphMap; label: string; description: string; route: keyof MainStackParamList; menuKey: MobileMenuKey }[] = [
+  { icon: 'airplane-outline', label: 'SPPD', description: 'Perjalanan dinas', route: 'Sppd', menuKey: 'sppd' },
+  { icon: 'document-text-outline', label: 'Izin', description: 'Izin tidak masuk bekerja', route: 'Izin', menuKey: 'izin' },
+  { icon: 'wallet-outline', label: 'Slip Gaji', description: 'Riwayat penghasilan', route: 'SlipGaji', menuKey: 'slip_gaji' },
+  { icon: 'notifications-outline', label: 'Notifikasi', description: 'Pemberitahuan sistem', route: 'Notifikasi', menuKey: 'notifikasi' },
 ];
 
 export function LainnyaScreen() {
   const { user, logout } = useAuth();
+  const { isEnabled } = useMobileMenu();
   const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
   const insets = useSafeAreaInsets();
+  const menu = MENU.filter((item) => isEnabled(item.menuKey));
 
   return (
     <View style={styles.container}>
@@ -36,26 +39,30 @@ export function LainnyaScreen() {
           </View>
         </Card>
 
-        <Text style={styles.sectionLabel}>Menu</Text>
-        <Card style={styles.menuCard}>
-          {MENU.map((item, index) => (
-            <TouchableOpacity
-              key={item.route}
-              style={[styles.menuRow, index < MENU.length - 1 && styles.menuRowBorder]}
-              onPress={() => navigation.navigate(item.route)}
-              activeOpacity={0.6}
-            >
-              <View style={styles.menuIcon}>
-                <Ionicons name={item.icon} size={19} color={colors.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.menuLabel}>{item.label}</Text>
-                <Text style={styles.menuDescription}>{item.description}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
-          ))}
-        </Card>
+        {menu.length > 0 && (
+          <>
+            <Text style={styles.sectionLabel}>Menu</Text>
+            <Card style={styles.menuCard}>
+              {menu.map((item, index) => (
+                <TouchableOpacity
+                  key={item.route}
+                  style={[styles.menuRow, index < menu.length - 1 && styles.menuRowBorder]}
+                  onPress={() => navigation.navigate(item.route)}
+                  activeOpacity={0.6}
+                >
+                  <View style={styles.menuIcon}>
+                    <Ionicons name={item.icon} size={19} color={colors.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.menuLabel}>{item.label}</Text>
+                    <Text style={styles.menuDescription}>{item.description}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+              ))}
+            </Card>
+          </>
+        )}
 
         <TouchableOpacity style={styles.logout} onPress={logout} activeOpacity={0.7}>
           <Ionicons name="log-out-outline" size={18} color={colors.danger} />

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Interfaces\Http\Controllers;
 
+use App\Shared\Configuration\Domain\ParameterResolver;
 use App\Shared\Holiday\Domain\HolidayRepository;
+use App\Shared\Temporal\Domain\AsOfDate;
 use DateTimeImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -28,7 +30,19 @@ final class HcDashboardController extends Controller
 
     private const AGING_WARNING_DAYS = 14;
 
-    public function __construct(private readonly HolidayRepository $holidays) {}
+    /** Jendela tampil untuk daftar ulang tahun/MPP/penghargaan masa bakti — dikonfirmasi bersama user. */
+    private const UPCOMING_WINDOW_MONTHS = 3;
+
+    /** MPP = sekian bulan SEBELUM usia pensiun normal (RETIREMENT_NORMAL_AGE) — dikonfirmasi bersama user. */
+    private const MPP_LEAD_MONTHS = 6;
+
+    /** Penghargaan Masa Bakti (PMB) — lihat komentar join_date di migrasi emp_employees. */
+    private const SERVICE_AWARD_YEARS = [15, 20, 35];
+
+    public function __construct(
+        private readonly HolidayRepository $holidays,
+        private readonly ParameterResolver $parameters,
+    ) {}
 
     public function index(): View
     {
@@ -94,6 +108,14 @@ final class HcDashboardController extends Controller
             'pendingApprovals' => $pendingApprovals,
             'pendingApprovalsAging' => $this->pendingApprovalsAging(),
             'recentActivity' => $recentActivity,
+            'employmentStatusBreakdown' => $this->employmentStatusBreakdown(),
+            'genderBreakdown' => $this->genderBreakdown(),
+            'upcomingBirthdays' => $this->upcomingBirthdays(),
+            'upcomingMpp' => $this->upcomingMpp(),
+            'upcomingServiceAwards' => $this->upcomingServiceAwards(),
+            'headcountByBranchOffice' => $this->headcountByBranchOffice(),
+            'positionDistributionByBranchOffice' => $this->positionDistributionByBranchOffice(),
+            'upcomingWindowMonths' => self::UPCOMING_WINDOW_MONTHS,
         ]);
     }
 
@@ -160,5 +182,182 @@ final class HcDashboardController extends Controller
         }
 
         return $result;
+    }
+
+    /** @return Collection<int, \stdClass> */
+    private function employmentStatusBreakdown(): Collection
+    {
+        return DB::table('emp_employees')
+            ->selectRaw('employment_status, count(*) as jumlah')
+            ->groupBy('employment_status')
+            ->orderBy('employment_status')
+            ->get();
+    }
+
+    /** @return Collection<int, \stdClass> */
+    private function genderBreakdown(): Collection
+    {
+        return DB::table('emp_employees')
+            ->selectRaw('gender, count(*) as jumlah')
+            ->groupBy('gender')
+            ->get();
+    }
+
+    /**
+     * Pegawai yang berulang tahun dalam UPCOMING_WINDOW_MONTHS ke depan —
+     * ulang tahun berulang TIAP TAHUN (beda dari MPP/penghargaan masa
+     * bakti yang satu kali saja), jadi perlu cari kemunculan BERIKUTNYA
+     * (tahun ini bila belum lewat, tahun depan bila sudah).
+     *
+     * @return Collection<int, object{full_name: string, nrp: string, office_name: string, tanggal: DateTimeImmutable}&\stdClass>
+     */
+    private function upcomingBirthdays(): Collection
+    {
+        $today = new DateTimeImmutable('today');
+        $windowEnd = $today->modify('+'.self::UPCOMING_WINDOW_MONTHS.' months');
+
+        /** @var Collection<int, object{full_name: string, nrp: string, birth_date: string, office_name: string}> $rows */
+        $rows = DB::table('emp_employees as e')
+            ->join('md_offices as o', 'o.id', '=', 'e.office_id')
+            ->whereNotNull('e.birth_date')
+            ->select('e.full_name', 'e.nrp', 'e.birth_date', 'o.name as office_name')
+            ->get();
+
+        return $rows
+            ->map(fn ($e) => (object) [
+                'full_name' => $e->full_name,
+                'nrp' => $e->nrp,
+                'office_name' => $e->office_name,
+                'tanggal' => $this->nextAnnualOccurrence(new DateTimeImmutable($e->birth_date), $today),
+            ])
+            ->filter(fn ($row) => $row->tanggal >= $today && $row->tanggal <= $windowEnd)
+            ->sortBy('tanggal')
+            ->values();
+    }
+
+    /**
+     * Pegawai yang akan memasuki MPP (Masa Persiapan Pensiun) dalam
+     * UPCOMING_WINDOW_MONTHS ke depan — MPP_LEAD_MONTHS sebelum usia
+     * pensiun normal (parameter RETIREMENT_NORMAL_AGE, SEBELUMNYA
+     * tersimpan tapi tidak pernah dipakai kode manapun).
+     *
+     * @return Collection<int, object{full_name: string, nrp: string, office_name: string, tanggal: DateTimeImmutable}&\stdClass>
+     */
+    private function upcomingMpp(): Collection
+    {
+        $today = new DateTimeImmutable('today');
+        $windowEnd = $today->modify('+'.self::UPCOMING_WINDOW_MONTHS.' months');
+        $retirementAge = $this->parameters->integer('RETIREMENT_NORMAL_AGE', AsOfDate::on($today));
+
+        /** @var Collection<int, object{full_name: string, nrp: string, birth_date: string, office_name: string}> $rows */
+        $rows = DB::table('emp_employees as e')
+            ->join('md_offices as o', 'o.id', '=', 'e.office_id')
+            ->whereNotNull('e.birth_date')
+            ->select('e.full_name', 'e.nrp', 'e.birth_date', 'o.name as office_name')
+            ->get();
+
+        return $rows
+            ->map(fn ($e) => (object) [
+                'full_name' => $e->full_name,
+                'nrp' => $e->nrp,
+                'office_name' => $e->office_name,
+                'tanggal' => (new DateTimeImmutable($e->birth_date))
+                    ->modify("+{$retirementAge} years")
+                    ->modify('-'.self::MPP_LEAD_MONTHS.' months'),
+            ])
+            ->filter(fn ($row) => $row->tanggal >= $today && $row->tanggal <= $windowEnd)
+            ->sortBy('tanggal')
+            ->values();
+    }
+
+    /**
+     * Pegawai yang akan mencapai milestone Penghargaan Masa Bakti (PMB)
+     * dalam UPCOMING_WINDOW_MONTHS ke depan, dikelompokkan per tahun
+     * milestone — berbasis join_date (Masa Kerja Riil), BUKAN
+     * permanent_date (lihat komentar kolom di migrasi emp_employees).
+     *
+     * @return array<int, Collection<int, object{full_name: string, nrp: string, office_name: string, tanggal: DateTimeImmutable}&\stdClass>> dikunci tahun milestone (15/20/35)
+     */
+    private function upcomingServiceAwards(): array
+    {
+        $today = new DateTimeImmutable('today');
+        $windowEnd = $today->modify('+'.self::UPCOMING_WINDOW_MONTHS.' months');
+
+        /** @var Collection<int, object{full_name: string, nrp: string, join_date: string, office_name: string}> $employees */
+        $employees = DB::table('emp_employees as e')
+            ->join('md_offices as o', 'o.id', '=', 'e.office_id')
+            ->whereNotNull('e.join_date')
+            ->select('e.full_name', 'e.nrp', 'e.join_date', 'o.name as office_name')
+            ->get();
+
+        $result = [];
+
+        foreach (self::SERVICE_AWARD_YEARS as $years) {
+            $result[$years] = $employees
+                ->map(fn ($e) => (object) [
+                    'full_name' => $e->full_name,
+                    'nrp' => $e->nrp,
+                    'office_name' => $e->office_name,
+                    'tanggal' => (new DateTimeImmutable($e->join_date))->modify("+{$years} years"),
+                ])
+                ->filter(fn ($row) => $row->tanggal >= $today && $row->tanggal <= $windowEnd)
+                ->sortBy('tanggal')
+                ->values();
+        }
+
+        return $result;
+    }
+
+    /** Kemunculan tahunan BERIKUTNYA dari tanggal $anniversary relatif $today — 29 Feb pada tahun bukan kabisat jatuh ke 28 Feb (bukan meluber ke Maret). */
+    private function nextAnnualOccurrence(DateTimeImmutable $anniversary, DateTimeImmutable $today): DateTimeImmutable
+    {
+        $month = (int) $anniversary->format('n');
+        $day = (int) $anniversary->format('j');
+        $year = (int) $today->format('Y');
+
+        $thisYear = $this->clampedDate($year, $month, $day);
+
+        return $thisYear >= $today ? $thisYear : $this->clampedDate($year + 1, $month, $day);
+    }
+
+    private function clampedDate(int $year, int $month, int $day): DateTimeImmutable
+    {
+        $daysInMonth = (int) (new DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month)))->format('t');
+
+        return new DateTimeImmutable(sprintf('%04d-%02d-%02d', $year, $month, min($day, $daysInMonth)));
+    }
+
+    /**
+     * "Daftar Jumlah pegawai pada masing-masing KC dan KCP" — subset headcountByOffice, hanya branch/sub_branch.
+     *
+     * @return Collection<int, \stdClass>
+     */
+    private function headcountByBranchOffice(): Collection
+    {
+        return DB::table('emp_employees as e')
+            ->join('md_offices as o', 'o.id', '=', 'e.office_id')
+            ->whereIn('o.office_type', ['branch', 'sub_branch'])
+            ->selectRaw('o.name as office_name, o.office_type, count(*) as jumlah')
+            ->groupBy('o.id', 'o.name', 'o.office_type')
+            ->orderBy('o.name')
+            ->get();
+    }
+
+    /**
+     * "Persebaran Data Per masing-masing jabatan pada KC dan KCP" — baris datar, dikelompokkan per kantor di view.
+     *
+     * @return Collection<int, \stdClass>
+     */
+    private function positionDistributionByBranchOffice(): Collection
+    {
+        return DB::table('emp_employees as e')
+            ->join('md_offices as o', 'o.id', '=', 'e.office_id')
+            ->join('md_positions as p', 'p.id', '=', 'e.position_id')
+            ->whereIn('o.office_type', ['branch', 'sub_branch'])
+            ->selectRaw('o.name as office_name, p.name as position_name, count(*) as jumlah')
+            ->groupBy('o.id', 'o.name', 'p.id', 'p.name')
+            ->orderBy('o.name')
+            ->orderBy('p.name')
+            ->get();
     }
 }

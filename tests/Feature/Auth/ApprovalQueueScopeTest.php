@@ -12,6 +12,7 @@ use App\Shared\Audit\Domain\AuditActor;
 use DateTimeImmutable;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\Support\SeedsOvertimeAttendance;
 use Tests\TestCase;
 
@@ -156,6 +157,29 @@ final class ApprovalQueueScopeTest extends TestCase
             ->get('/persetujuan/lembur');
 
         $response->assertForbidden();
+    }
+
+    /**
+     * Regresi bug nyata: `overtime-approval.view` diberikan ke peran LAIN
+     * (bukan atasan_langsung/pimpinan_kantor/auditor) lewat Peta Peran
+     * (RoleFeatureMapController) — middleware rute meloloskannya, tapi
+     * ApprovalQueueController::index() dulu punya gerbang tambahan yang
+     * HARDCODE hanya 3 peran itu, jadi tetap "Akses Ditolak" walau
+     * izinnya sudah benar di role_has_permissions. Cek di sini harus
+     * SELALU cermin permission, bukan daftar peran terpisah.
+     */
+    public function test_role_lain_yang_diberi_izin_lewat_peta_peran_tidak_lagi_ditolak(): void
+    {
+        $roleId = DB::table('roles')->where('name', 'hr_admin')->value('id');
+        $permissionId = DB::table('permissions')->where('name', 'overtime-approval.view')->value('id');
+
+        DB::table('role_has_permissions')->insert(['role_id' => $roleId, 'permission_id' => $permissionId]);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        $response = $this->actingAs($this->userWithNrp('2021.05.0302')) // Rina Marlina — hr_admin, BUKAN atasan_langsung/pimpinan_kantor/auditor
+            ->get('/persetujuan/lembur');
+
+        $response->assertOk();
     }
 
     private function submitOvertimeFor(string $nrp): string

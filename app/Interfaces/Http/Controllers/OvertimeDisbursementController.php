@@ -200,10 +200,21 @@ final class OvertimeDisbursementController extends Controller
     {
         [$batch, $items, $spklSlug, $officeAddress] = $this->batchWithItemsForPrint($id);
 
+        // Rujukan SK Direksi tarif lembur — diambil DINAMIS dari
+        // cfg_parameter_values (bukan diketik ulang di templat) supaya
+        // selalu mencerminkan SK yang benar-benar berlaku, sama seperti
+        // dipakai KonfigurasiParameter untuk tarif itu sendiri.
+        $skDireksi = DB::table('cfg_parameters as p')
+            ->join('cfg_parameter_values as v', 'v.parameter_id', '=', 'p.id')
+            ->where('p.code', 'OVT_RATE_MGR_SPV_OFC')
+            ->whereNull('v.deleted_at')
+            ->orderByDesc('v.effective_from')
+            ->value('v.source_document');
+
         // stream(), bukan download() — tampil langsung di tab browser
         // (pratinjau PDF bawaan browser, lengkap dengan tombol cetak
         // bawaannya) alih-alih memaksa unduh berkas.
-        return Pdf::loadView('admin.overtime-payment-memo', compact('batch', 'items', 'officeAddress'))
+        return Pdf::loadView('admin.overtime-payment-memo', compact('batch', 'items', 'officeAddress', 'skDireksi'))
             ->stream("Memo-Internal-{$spklSlug}.pdf");
     }
 
@@ -223,6 +234,20 @@ final class OvertimeDisbursementController extends Controller
             ->stream("Jurnal-Slip-{$spklSlug}.pdf");
     }
 
+    /**
+     * Rincian rekening penerima — dokumen TERSENDIRI (bukan lagi tabel
+     * di dalam Nota Debet, lihat overtime-payment-nota-debet.blade.php)
+     * supaya persis format resmi Bank NTB Syariah ("LAMPIRAN PENERIMA
+     * UANG LEMBUR" adalah cetakan sendiri).
+     */
+    public function printLampiranPenerima(string $id): Response
+    {
+        [$batch, $items, $spklSlug, $officeAddress] = $this->batchWithItemsForPrint($id);
+
+        return Pdf::loadView('admin.overtime-payment-lampiran-penerima', compact('batch', 'items', 'officeAddress'))
+            ->stream("Lampiran-Penerima-{$spklSlug}.pdf");
+    }
+
     /** @return array{0: PaymentBatchRow, 1: Collection<int, \stdClass>, 2: string, 3: ?string} */
     private function batchWithItemsForPrint(string $id): array
     {
@@ -231,10 +256,15 @@ final class OvertimeDisbursementController extends Controller
         abort_if($batch === null, 404);
         $this->guardBatchAccess($batch);
 
+        // planned_hours/work_date/spkl_number BUKAN kolom ovt_payment_batch_items
+        // (cuma gross/tax/net cents) — join TAMBAHAN ke ovt_requests lewat
+        // ovt_request_id (FK yang sudah ada) untuk Memo Internal ("Lama
+        // Hari/Jam", "Uang Lembur" per jam, rujukan nomor SPKL pengajuan).
         $items = DB::table('ovt_payment_batch_items as i')
             ->join('emp_employees as e', 'e.id', '=', 'i.employee_id')
+            ->join('ovt_requests as r', 'r.id', '=', 'i.ovt_request_id')
             ->where('i.batch_id', $id)
-            ->select('i.*', 'e.full_name', 'e.nrp')
+            ->select('i.*', 'e.full_name', 'e.nrp', 'r.spkl_number', 'r.work_date', 'r.planned_hours')
             ->orderBy('e.full_name')
             ->get();
 

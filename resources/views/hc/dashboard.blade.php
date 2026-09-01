@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('judul', 'Dashboard HC')
-@section('peran', 'HR Approver')
+@section('peran', 'Pejabat SDM / Admin Sistem')
 
 @section('gaya')
 .kepala{margin-bottom:16px}
@@ -14,6 +14,8 @@
 .ring .l{font-size:11.5px;color:var(--teks-lemah);margin-top:3px;font-weight:500}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:13px}
 @media(max-width:860px){.grid2{grid-template-columns:1fr}}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px}
+@media(max-width:860px){.grid3{grid-template-columns:1fr}}
 .kartu-judul{font-size:11px;font-weight:700;text-transform:uppercase;
   letter-spacing:.07em;color:var(--teks-lemah);margin-bottom:13px}
 .baris{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--garis);font-size:12.5px}
@@ -63,6 +65,96 @@ table.aging tr:last-child td{border-bottom:0}
   <div class="ring">
     <div class="a angka">{{ $tanpaCatatanHariIni }}</div>
     <div class="l">Tanpa catatan hari ini</div>
+  </div>
+</div>
+
+@php
+  $statusLabel = ['tetap' => 'Tetap', 'trainee' => 'Trainee', 'kontrak' => 'Kontrak', 'outsource' => 'Outsourcing'];
+  $genderLabel = ['L' => 'Laki-laki', 'P' => 'Perempuan'];
+@endphp
+
+<div class="ringkas">
+  @foreach ($employmentStatusBreakdown as $s)
+    <div class="ring">
+      <div class="a angka">{{ $s->jumlah }}</div>
+      <div class="l">Pegawai {{ $statusLabel[$s->employment_status] ?? $s->employment_status }}</div>
+    </div>
+  @endforeach
+  @foreach ($genderBreakdown as $g)
+    <div class="ring">
+      <div class="a angka">{{ $g->jumlah }}</div>
+      <div class="l">Pegawai {{ $genderLabel[$g->gender] ?? ($g->gender ?? 'Tidak diisi') }}</div>
+    </div>
+  @endforeach
+</div>
+
+<div class="grid2">
+  <div class="kartu">
+    <div class="kartu-judul">Ulang tahun {{ $upcomingWindowMonths }} bulan ke depan</div>
+    @forelse ($upcomingBirthdays as $b)
+      <div class="baris">
+        <span>{{ $b->full_name }} <span class="sumber" style="color:var(--teks-lemah)">({{ $b->office_name }})</span></span>
+        <span class="angka">{{ $b->tanggal->format('d M Y') }}</span>
+      </div>
+    @empty
+      <div class="kosong">Tidak ada pegawai berulang tahun dalam periode ini.</div>
+    @endforelse
+  </div>
+
+  <div class="kartu">
+    <div class="kartu-judul">Akan memasuki MPP {{ $upcomingWindowMonths }} bulan ke depan</div>
+    @forelse ($upcomingMpp as $m)
+      <div class="baris">
+        <span>{{ $m->full_name }} <span class="sumber" style="color:var(--teks-lemah)">({{ $m->office_name }})</span></span>
+        <span class="angka">{{ $m->tanggal->format('d M Y') }}</span>
+      </div>
+    @empty
+      <div class="kosong">Tidak ada pegawai yang akan memasuki MPP dalam periode ini.</div>
+    @endforelse
+  </div>
+</div>
+
+<div class="kartu">
+  <div class="kartu-judul">Penghargaan Masa Bakti {{ $upcomingWindowMonths }} bulan ke depan</div>
+  <div class="grid3">
+    @foreach ($upcomingServiceAwards as $tahun => $daftar)
+      <div>
+        <p class="ket" style="margin-top:0;font-weight:700;color:var(--teks)">{{ $tahun }} Tahun</p>
+        @forelse ($daftar as $d)
+          <div class="baris">
+            <span>{{ $d->full_name }} <span class="sumber" style="color:var(--teks-lemah)">({{ $d->office_name }})</span></span>
+            <span class="angka">{{ $d->tanggal->format('d M Y') }}</span>
+          </div>
+        @empty
+          <div class="kosong">Tidak ada.</div>
+        @endforelse
+      </div>
+    @endforeach
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="kartu">
+    <div class="kartu-judul">Jumlah pegawai per KC &amp; KCP</div>
+    @forelse ($headcountByBranchOffice as $h)
+      <div class="baris"><span>{{ $h->office_name }} <span class="sumber" style="color:var(--teks-lemah)">({{ $h->office_type === 'branch' ? 'KC' : 'KCP' }})</span></span><span class="angka">{{ $h->jumlah }}</span></div>
+    @empty
+      <div class="kosong">Belum ada data KC/KCP.</div>
+    @endforelse
+  </div>
+
+  <div class="kartu">
+    <div class="kartu-judul">Persebaran jabatan per KC &amp; KCP</div>
+    <div class="gulir">
+      @forelse ($positionDistributionByBranchOffice->groupBy('office_name') as $officeName => $positions)
+        <p class="ket" style="margin-top:0;font-weight:700;color:var(--teks)">{{ $officeName }}</p>
+        @foreach ($positions as $p)
+          <div class="baris"><span>{{ $p->position_name }}</span><span class="angka">{{ $p->jumlah }}</span></div>
+        @endforeach
+      @empty
+        <div class="kosong">Belum ada data KC/KCP.</div>
+      @endforelse
+    </div>
   </div>
 </div>
 

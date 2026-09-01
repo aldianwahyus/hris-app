@@ -8,11 +8,11 @@
   margin-bottom:16px;flex-wrap:wrap;gap:12px}
 .kepala h2{font-size:17px;font-weight:700;letter-spacing:-.02em}
 .kepala p{font-size:12.5px;color:var(--teks-lemah);margin-top:3px}
-.tab{display:flex;gap:6px}
+.tab{display:flex;gap:6px;flex-wrap:wrap}
 .tab a{padding:7px 14px;border-radius:7px;border:1px solid var(--garis);background:var(--putih);
   font-size:12.5px;font-weight:600;color:var(--teks)}
 .tab a.aktif{background:var(--hijau);color:#fff;border-color:var(--hijau)}
-.filter{display:flex;gap:8px;align-items:center;margin-bottom:16px}
+.filter{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
 .filter input,.filter select{padding:7px 10px;border:1px solid var(--garis);border-radius:7px;font-family:inherit;font-size:12.5px}
 .filter button{padding:7px 14px;border-radius:7px;border:1px solid var(--garis);background:var(--putih);
   font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
@@ -40,25 +40,45 @@ tbody tr:last-child td{border-bottom:0}
 @section('isi')
 @php
   $tipeLabel = ['head_office' => 'Kantor Pusat', 'branch' => 'Kantor Cabang', 'sub_branch' => 'Kantor Cabang Pembantu'];
+  $tabLabel = ['harian' => 'Harian', 'mingguan' => 'Mingguan', 'bulanan' => 'Bulanan', 'tahunan' => 'Tahunan', 'rentang' => 'Rentang Waktu'];
+  $keteranganPeriode = [
+    'harian' => 'satu tanggal',
+    'mingguan' => 'satu minggu (Senin–Minggu)',
+    'bulanan' => 'satu bulan',
+    'tahunan' => 'satu tahun',
+    'rentang' => 'rentang tanggal bebas',
+  ][$tampilan];
+  $exportParams = array_filter(array_merge(
+    ['tampilan' => $tampilan, 'tipe_kantor' => $officeType],
+    match ($tampilan) {
+      'harian' => ['tanggal' => $tanggal],
+      'mingguan' => ['minggu' => $minggu],
+      'bulanan' => ['bulan' => $bulan],
+      'tahunan' => ['tahun' => $tahun],
+      'rentang' => ['dari' => $dari, 'sampai' => $sampai],
+    },
+  ));
 @endphp
 <div class="kepala">
   <div>
     <h2>Rekap absensi — {{ $office ? $office->name : 'Seluruh Bank' }}{{ $office ? '' : ($officeType ? ' · '.$tipeLabel[$officeType] : '') }}</h2>
-    <p>{{ $office ? 'Lingkup kantor Anda (OFFICE)' : 'Lingkup BANK_WIDE — kantor pusat seluruh divisi, seluruh kantor cabang, dan kantor cabang pembantu' }}{{ $tampilan === 'harian' ? ' · 200 baris terbaru' : " · hari kerja proksi (Senin\u{2013}Jumat), bukan kalender hari libur nasional" }}</p>
+    <p>{{ $office ? 'Lingkup kantor Anda (OFFICE)' : 'Lingkup BANK_WIDE — kantor pusat seluruh divisi, seluruh kantor cabang, dan kantor cabang pembantu' }} · {{ $keteranganPeriode }}</p>
   </div>
   <div class="tab">
-    <a href="{{ route('hr.attendance-recap', $officeType ? ['tipe_kantor' => $officeType] : []) }}" class="{{ $tampilan === 'harian' ? 'aktif' : '' }}">Harian</a>
-    <a href="{{ route('hr.attendance-recap', array_filter(['tampilan' => 'bulanan', 'tipe_kantor' => $officeType])) }}" class="{{ $tampilan === 'bulanan' ? 'aktif' : '' }}">Bulanan</a>
-    <a href="{{ route('hr.attendance-recap.export', array_filter(['tampilan' => $tampilan === 'bulanan' ? 'bulanan' : null, 'bulan' => $tampilan === 'bulanan' ? $bulan : null, 'tipe_kantor' => $officeType])) }}" class="ekspor">⬇ Ekspor CSV</a>
+    @foreach ($tabLabel as $key => $label)
+      <a href="{{ route('hr.attendance-recap', array_filter(['tampilan' => $key === 'harian' ? null : $key, 'tipe_kantor' => $officeType])) }}"
+         class="{{ $tampilan === $key ? 'aktif' : '' }}">{{ $label }}</a>
+    @endforeach
+    <a href="{{ route('hr.attendance-recap.export', $exportParams) }}" class="ekspor">⬇ Ekspor CSV</a>
   </div>
 </div>
 
 @unless ($office)
   <form method="GET" class="filter">
     <input type="hidden" name="tampilan" value="{{ $tampilan }}">
-    @if ($tampilan === 'bulanan')
-      <input type="hidden" name="bulan" value="{{ $bulan }}">
-    @endif
+    @foreach (array_diff_key($exportParams, ['tampilan' => null, 'tipe_kantor' => null]) as $key => $value)
+      <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+    @endforeach
     <select name="tipe_kantor" onchange="this.form.submit()">
       <option value="">Semua Kantor</option>
       @foreach ($tipeLabel as $value => $label)
@@ -68,7 +88,26 @@ tbody tr:last-child td{border-bottom:0}
   </form>
 @endunless
 
-@if ($tampilan === 'bulanan')
+@if ($tampilan === 'harian')
+  <form method="GET" class="filter">
+    <input type="hidden" name="tampilan" value="harian">
+    @if ($officeType)
+      <input type="hidden" name="tipe_kantor" value="{{ $officeType }}">
+    @endif
+    <input type="date" name="tanggal" value="{{ $tanggal }}">
+    <button type="submit">Tampilkan</button>
+  </form>
+@elseif ($tampilan === 'mingguan')
+  <form method="GET" class="filter">
+    <input type="hidden" name="tampilan" value="mingguan">
+    @if ($officeType)
+      <input type="hidden" name="tipe_kantor" value="{{ $officeType }}">
+    @endif
+    <input type="week" name="minggu" value="{{ $minggu }}">
+    <button type="submit">Tampilkan</button>
+    <span style="font-size:11.5px;color:var(--teks-lemah)">{{ $workingDays }} hari kerja pada minggu ini</span>
+  </form>
+@elseif ($tampilan === 'bulanan')
   <form method="GET" class="filter">
     <input type="hidden" name="tampilan" value="bulanan">
     @if ($officeType)
@@ -78,38 +117,32 @@ tbody tr:last-child td{border-bottom:0}
     <button type="submit">Tampilkan</button>
     <span style="font-size:11.5px;color:var(--teks-lemah)">{{ $workingDays }} hari kerja pada bulan ini</span>
   </form>
-
-  <div class="gulir">
-    <table>
-      <thead>
-        <tr>
-          <th>Pegawai</th>
-          @unless ($office)
-            <th>Kantor</th>
-          @endunless
-          <th>Hadir</th><th>Terlambat</th><th>Tanpa Catatan</th>
-        </tr>
-      </thead>
-      <tbody>
-        @forelse ($perPegawai as $p)
-          <tr>
-            <td class="peg">{{ $p->full_name }} <span class="angka" style="color:var(--teks-lemah)">({{ $p->nrp }})</span></td>
-            @unless ($office)
-              <td>{{ $p->office_name }} <span class="sumber">({{ $tipeLabel[$p->office_type] ?? $p->office_type }})</span></td>
-            @endunless
-            <td class="angka">{{ $p->total_hadir }}</td>
-            <td class="angka">{{ $p->total_telat }}</td>
-            <td class="angka {{ $p->hari_tanpa_catatan > 0 ? 'peringatan' : '' }}">{{ $p->hari_tanpa_catatan }}</td>
-          </tr>
-        @empty
-          <tr>
-            <td colspan="{{ $office ? 4 : 5 }}" class="kosong">Belum ada data absensi pada bulan ini.</td>
-          </tr>
-        @endforelse
-      </tbody>
-    </table>
-  </div>
+@elseif ($tampilan === 'tahunan')
+  <form method="GET" class="filter">
+    <input type="hidden" name="tampilan" value="tahunan">
+    @if ($officeType)
+      <input type="hidden" name="tipe_kantor" value="{{ $officeType }}">
+    @endif
+    <input type="number" name="tahun" value="{{ $tahun }}" min="2000" max="2100" style="width:90px">
+    <button type="submit">Tampilkan</button>
+    <span style="font-size:11.5px;color:var(--teks-lemah)">{{ $workingDays }} hari kerja pada tahun ini</span>
+  </form>
 @else
+  <form method="GET" class="filter">
+    <input type="hidden" name="tampilan" value="rentang">
+    @if ($officeType)
+      <input type="hidden" name="tipe_kantor" value="{{ $officeType }}">
+    @endif
+    <span style="font-size:12.5px">Dari</span>
+    <input type="date" name="dari" value="{{ $dari }}">
+    <span style="font-size:12.5px">s.d.</span>
+    <input type="date" name="sampai" value="{{ $sampai }}">
+    <button type="submit">Tampilkan</button>
+    <span style="font-size:11.5px;color:var(--teks-lemah)">{{ $workingDays }} hari kerja pada rentang ini</span>
+  </form>
+@endif
+
+@if ($tampilan === 'harian')
   <div class="gulir">
     <table>
       <thead>
@@ -152,7 +185,38 @@ tbody tr:last-child td{border-bottom:0}
           </tr>
         @empty
           <tr>
-            <td colspan="{{ $office ? 7 : 8 }}" class="kosong">Belum ada data absensi.</td>
+            <td colspan="{{ $office ? 7 : 8 }}" class="kosong">Belum ada data absensi pada tanggal ini.</td>
+          </tr>
+        @endforelse
+      </tbody>
+    </table>
+  </div>
+@else
+  <div class="gulir">
+    <table>
+      <thead>
+        <tr>
+          <th>Pegawai</th>
+          @unless ($office)
+            <th>Kantor</th>
+          @endunless
+          <th>Hadir</th><th>Terlambat</th><th>Tanpa Catatan</th>
+        </tr>
+      </thead>
+      <tbody>
+        @forelse ($perPegawai as $p)
+          <tr>
+            <td class="peg">{{ $p->full_name }} <span class="angka" style="color:var(--teks-lemah)">({{ $p->nrp }})</span></td>
+            @unless ($office)
+              <td>{{ $p->office_name }} <span class="sumber">({{ $tipeLabel[$p->office_type] ?? $p->office_type }})</span></td>
+            @endunless
+            <td class="angka">{{ $p->total_hadir }}</td>
+            <td class="angka">{{ $p->total_telat }}</td>
+            <td class="angka {{ $p->hari_tanpa_catatan > 0 ? 'peringatan' : '' }}">{{ $p->hari_tanpa_catatan }}</td>
+          </tr>
+        @empty
+          <tr>
+            <td colspan="{{ $office ? 4 : 5 }}" class="kosong">Belum ada data absensi pada periode ini.</td>
           </tr>
         @endforelse
       </tbody>

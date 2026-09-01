@@ -43,16 +43,22 @@ final class RunPayrollDraftForAllOffices
 
         $created = [];
         $skipped = [];
+        $failedEmployees = [];
 
         foreach ($offices as $office) {
             try {
-                $this->runDraft->handle(officeId: $office->id, period: $period, actor: $actor);
+                $officeFailures = [];
+                $this->runDraft->handle(officeId: $office->id, period: $period, actor: $actor, failedEmployees: $officeFailures);
                 $created[] = $office->name;
+
+                foreach ($officeFailures as $failure) {
+                    $failedEmployees[] = ['office' => $office->name, 'name' => $failure['name'], 'reason' => $failure['reason']];
+                }
             } catch (PayrollRunAlreadyExists) {
                 $skipped[] = $office->name;
             }
         }
 
-        return new BulkPayrollDraftResult(createdOfficeNames: $created, skippedAlreadyExistsOfficeNames: $skipped);
+        return new BulkPayrollDraftResult(createdOfficeNames: $created, skippedAlreadyExistsOfficeNames: $skipped, failedEmployees: $failedEmployees);
     }
 }

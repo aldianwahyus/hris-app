@@ -70,8 +70,10 @@ final class OvertimePaymentBatchTest extends TestCase
         $this->assertSame('disbursed', $row->status);
         $this->assertSame($batch->spkl_number, $row->disbursement_reference);
 
-        // Tiga dokumen cetak harus bisa diunduh (PDF, bukan 500).
-        foreach (['print-memo', 'print-nota-debet', 'print-jurnal-slip'] as $suffix) {
+        // Empat dokumen cetak harus bisa diunduh (PDF, bukan 500) —
+        // Lampiran Penerima sekarang dokumen TERSENDIRI (bukan lagi
+        // menempel di dalam Nota Debet), lihat printLampiranPenerima().
+        foreach (['print-memo', 'print-nota-debet', 'print-jurnal-slip', 'print-lampiran-penerima'] as $suffix) {
             $print = $this->actingAs($nurAisyah)->get("/persetujuan/lembur-pembayaran/batch/{$batchId}/cetak/".str_replace('print-', '', $suffix));
             $print->assertOk();
             $this->assertSame('application/pdf', $print->headers->get('Content-Type'));

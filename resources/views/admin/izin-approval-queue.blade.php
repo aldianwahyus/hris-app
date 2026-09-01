@@ -71,7 +71,7 @@ tbody tr:last-child td{border-bottom:0}
                   @csrf
                   <button class="mini utama" type="submit">Setujui</button>
                 </form>
-                <form method="POST" action="{{ route('admin.izin-reject', $r->id) }}">
+                <form method="POST" action="{{ route('admin.izin-reject', $r->id) }}" onsubmit="mintaAlasanTolak(this, event); return false;">
                   @csrf
                   <button class="mini" type="submit">Tolak</button>
                 </form>

@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient, apiErrorMessage } from '../api/client';
-import { LeaveRequestRow, ListResponse } from '../api/types';
+import { LeaveListResponse, LeaveRequestRow } from '../api/types';
 import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
 import { DateField } from '../components/DateField';
@@ -25,6 +25,7 @@ export function LeaveScreen() {
   const insets = useSafeAreaInsets();
   const { showSuccess, showError } = useToast();
   const [requests, setRequests] = useState<LeaveRequestRow[]>([]);
+  const [sisaCuti, setSisaCuti] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [formVisible, setFormVisible] = useState(false);
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -34,8 +35,11 @@ export function LeaveScreen() {
 
   const load = useCallback(() => {
     return apiClient
-      .get<ListResponse<LeaveRequestRow>>('/cuti')
-      .then((response) => setRequests(response.data.data))
+      .get<LeaveListResponse>('/cuti')
+      .then((response) => {
+        setRequests(response.data.data);
+        setSisaCuti(response.data.sisa_cuti);
+      })
       .catch(() => {});
   }, []);
 
@@ -52,6 +56,23 @@ export function LeaveScreen() {
     // di sini daripada pengguna bingung kenapa pengajuan ditolak.
     if (endDate && date > endDate) {
       setEndDate(null);
+    }
+  }
+
+  function confirmCancel(item: LeaveRequestRow) {
+    Alert.alert('Batalkan Pengajuan', `Batalkan pengajuan cuti ${item.request_number}?`, [
+      { text: 'Tidak', style: 'cancel' },
+      { text: 'Ya, Batalkan', style: 'destructive', onPress: () => cancelRequest(item.id) },
+    ]);
+  }
+
+  async function cancelRequest(id: string) {
+    try {
+      await apiClient.post(`/cuti/${id}/batal`);
+      showSuccess('Pengajuan cuti berhasil dibatalkan.');
+      load();
+    } catch (error) {
+      showError(apiErrorMessage(error, 'Pengajuan tidak dapat dibatalkan.'));
     }
   }
 
@@ -96,6 +117,23 @@ export function LeaveScreen() {
           setRefreshing(false);
         }}
         refreshing={refreshing}
+        ListHeaderComponent={
+          sisaCuti !== null ? (
+            <Card style={styles.balanceCard}>
+              <View style={styles.balanceRow}>
+                <View style={styles.balanceIconWrap}>
+                  <Ionicons name="calendar-number-outline" size={20} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.balanceLabel}>Sisa Cuti</Text>
+                  <Text style={styles.balanceValue}>
+                    {Number.isInteger(sisaCuti) ? sisaCuti : sisaCuti.toFixed(1)} hari
+                  </Text>
+                </View>
+              </View>
+            </Card>
+          ) : null
+        }
         renderItem={({ item }) => {
           const st = requestStatus(item.status);
 
@@ -110,6 +148,14 @@ export function LeaveScreen() {
                 <Text style={styles.dateText}>{item.start_date} — {item.end_date}</Text>
               </View>
               {item.reason ? <Text style={styles.reason}>{item.reason}</Text> : null}
+              {item.status === 'rejected' && item.decision_note ? (
+                <Text style={styles.decisionNote}>Alasan penolakan: {item.decision_note}</Text>
+              ) : null}
+              {item.status === 'pending' ? (
+                <TouchableOpacity onPress={() => confirmCancel(item)} style={styles.cancelBtn}>
+                  <Text style={styles.cancelBtnText}>Batalkan</Text>
+                </TouchableOpacity>
+              ) : null}
             </Card>
           );
         }}
@@ -133,10 +179,25 @@ export function LeaveScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   list: { padding: spacing.xl, gap: spacing.md },
+  balanceCard: { gap: spacing.lg },
+  balanceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  balanceIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  balanceLabel: { ...type.caption },
+  balanceValue: { ...type.h2, fontSize: 15, marginTop: 2 },
   card: { gap: spacing.xs },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   number: { ...type.body, fontWeight: '700' },
   dateRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: 2 },
   dateText: { ...type.caption },
   reason: { fontSize: 12.5, color: colors.textMuted, marginTop: spacing.xs, fontStyle: 'italic' },
+  decisionNote: { fontSize: 12.5, color: colors.danger, marginTop: spacing.xs },
+  cancelBtn: { alignSelf: 'flex-start', marginTop: spacing.sm },
+  cancelBtnText: { fontSize: 12.5, fontWeight: '700', color: colors.danger },
 });

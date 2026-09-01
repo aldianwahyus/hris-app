@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Izin\Interfaces\Http\Controllers\Api\V1;
 
+use App\Modules\Izin\Application\CancelIzinRequest;
 use App\Modules\Izin\Application\SubmitIzinRequest;
 use App\Modules\Izin\Domain\IzinCategory;
 use App\Modules\Izin\Interfaces\Http\Requests\SubmitIzinRequestForm;
@@ -24,7 +25,10 @@ use RuntimeException;
  */
 final class IzinApiController
 {
-    public function __construct(private readonly SubmitIzinRequest $submit) {}
+    public function __construct(
+        private readonly SubmitIzinRequest $submit,
+        private readonly CancelIzinRequest $cancel,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -82,5 +86,29 @@ final class IzinApiController
         }
 
         return response()->json(['request_number' => $requestNumber], 201);
+    }
+
+    public function cancel(Request $request, string $id): JsonResponse
+    {
+        $user = $request->user();
+
+        abort_if($user === null || $user->employee_id === null, 403, 'Akun ini belum ditautkan ke data pegawai.');
+
+        try {
+            $this->cancel->handle(
+                izinRequestId: $id,
+                employeeId: $user->employee_id,
+                actor: new AuditActor(
+                    actorId: $user->employee_id,
+                    actorRole: implode(',', $user->getRoleNames()->all()),
+                    ipAddress: $request->ip(),
+                    userAgent: $request->userAgent(),
+                ),
+            );
+        } catch (DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['message' => 'Pengajuan izin berhasil dibatalkan.']);
     }
 }

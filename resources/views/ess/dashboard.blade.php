@@ -135,12 +135,15 @@
             <div class="s angka">{{ date('j M', strtotime($r->start_date)) }}–{{ date('j M Y', strtotime($r->end_date)) }}</div>
           </div>
           <span class="status {{ $r->status }}">
-            {{ ['pending' => 'Menunggu', 'approved' => 'Disetujui', 'rejected' => 'Ditolak'][$r->status] ?? $r->status }}
+            {{ ['pending' => 'Menunggu', 'pending_pimpinan' => 'Menunggu', 'approved' => 'Disetujui', 'rejected' => 'Ditolak', 'cancelled' => 'Dibatalkan'][$r->status] ?? $r->status }}
           </span>
         </div>
       @empty
         <div class="kosong">Belum ada pengajuan cuti.</div>
       @endforelse
+      <div style="margin-top:12px;text-align:right">
+        <a href="{{ route('leave.history') }}" style="font-size:11.5px;font-weight:600;color:var(--hijau-tua)">Lihat riwayat lengkap →</a>
+      </div>
     </div>
 
     <div class="kartu">
@@ -177,6 +180,9 @@
       @empty
         <div class="kosong">Belum ada pengajuan lembur.</div>
       @endforelse
+      <div style="margin-top:12px;text-align:right">
+        <a href="{{ route('overtime.history') }}" style="font-size:11.5px;font-weight:600;color:var(--hijau-tua)">Lihat riwayat lengkap →</a>
+      </div>
     </div>
   </div>
 </div>

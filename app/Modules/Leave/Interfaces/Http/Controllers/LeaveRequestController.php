@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Leave\Interfaces\Http\Controllers;
 
+use App\Modules\Leave\Application\CancelLeaveRequest;
 use App\Modules\Leave\Application\SubmitLeaveRequest;
 use App\Modules\Leave\Domain\FirstLeaveMustBeBlock;
 use App\Modules\Leave\Domain\InsufficientLeaveBalance;
@@ -13,16 +14,60 @@ use App\Shared\Audit\Domain\AuditActor;
 use DateTimeImmutable;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use RuntimeException;
 
 final class LeaveRequestController
 {
-    public function __construct(private readonly SubmitLeaveRequest $submit) {}
+    public function __construct(
+        private readonly SubmitLeaveRequest $submit,
+        private readonly CancelLeaveRequest $cancel,
+    ) {}
 
     public function create(): View
     {
         return view('leave.create');
+    }
+
+    /** Riwayat Cuti Saya — SEMUA pengajuan milik pegawai yang login, tidak dibatasi seperti daftar 3 baris di dashboard. */
+    public function history(Request $request): View
+    {
+        $user = $request->user();
+
+        abort_if($user === null || $user->employee_id === null, 403, 'Akun ini belum ditautkan ke data pegawai.');
+
+        $requests = DB::table('leave_requests')
+            ->where('employee_id', $user->employee_id)
+            ->orderByDesc('created_at')
+            ->paginate(20);
+
+        return view('leave.history', compact('requests'));
+    }
+
+    public function cancelRequest(Request $request, string $id): RedirectResponse
+    {
+        $user = $request->user();
+
+        abort_if($user === null || $user->employee_id === null, 403, 'Akun ini belum ditautkan ke data pegawai.');
+
+        try {
+            $this->cancel->handle(
+                leaveRequestId: $id,
+                employeeId: $user->employee_id,
+                actor: new AuditActor(
+                    actorId: $user->employee_id,
+                    actorRole: implode(',', $user->getRoleNames()->all()),
+                    ipAddress: $request->ip(),
+                    userAgent: $request->userAgent(),
+                ),
+            );
+        } catch (DomainException $e) {
+            return back()->with('gagal', $e->getMessage());
+        }
+
+        return back()->with('sukses', 'Pengajuan cuti berhasil dibatalkan.');
     }
 
     public function store(SubmitLeaveRequestForm $request): RedirectResponse

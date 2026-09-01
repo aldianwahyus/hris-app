@@ -87,6 +87,95 @@ final class AttendanceRecapScopeTest extends TestCase
         $response->assertSeeText('21 hari kerja pada bulan ini');
     }
 
+    /** Harian sekarang di-scope ke SATU tanggal (default hari ini), bukan lagi "200 baris terbaru" apa adanya. */
+    public function test_rekap_harian_hanya_menampilkan_tanggal_yang_dipilih(): void
+    {
+        $employeeId = DB::table('emp_employees')->where('nrp', '2021.05.0302')->value('id');
+
+        DB::table('att_attendance_records')->insert([
+            'id' => (string) Uuid7::generate(),
+            'employee_id' => $employeeId,
+            'work_date' => '2026-09-10',
+            'check_in_at' => new DateTimeImmutable('2026-09-10 07:50:00'),
+            'check_in_source' => 'fingerprint',
+            'status' => 'hadir',
+            'created_at' => now(),
+            'updated_at' => now(),
+            'version' => 1,
+        ]);
+
+        $lain = $this->actingAs($this->userWithNrp('2021.05.0302'))
+            ->get('/pegawai/absensi?tanggal=2026-09-11');
+        $lain->assertOk();
+        $lain->assertSeeText('Belum ada data absensi pada tanggal ini.');
+
+        $benar = $this->actingAs($this->userWithNrp('2021.05.0302'))
+            ->get('/pegawai/absensi?tanggal=2026-09-10');
+        $benar->assertOk();
+        $benar->assertSeeText('Rina Marlina');
+    }
+
+    public function test_rekap_mingguan_menghitung_hari_kerja_senin_sampai_minggu(): void
+    {
+        // 2026-09-07 (Senin) s.d. 2026-09-13 (Minggu) — ISO week 2026-W37,
+        // 5 hari kerja mentah, tanpa libur nasional dalam rentang ini.
+        $this->insertAttendanceOn('2021.05.0302', '2026-09-08', '07:50:00');
+
+        $response = $this->actingAs($this->userWithNrp('2021.05.0302'))
+            ->get('/pegawai/absensi?tampilan=mingguan&minggu=2026-W37');
+
+        $response->assertOk();
+        $response->assertSeeText('5 hari kerja pada minggu ini');
+        $response->assertSeeText('Rina Marlina');
+    }
+
+    public function test_rekap_tahunan_menghitung_hari_kerja_setahun_penuh(): void
+    {
+        $this->insertAttendanceOn('2021.05.0302', '2026-03-02', '07:50:00');
+
+        $response = $this->actingAs($this->userWithNrp('2021.05.0302'))
+            ->get('/pegawai/absensi?tampilan=tahunan&tahun=2026');
+
+        $response->assertOk();
+        $response->assertSeeText('Rina Marlina');
+        $response->assertDontSeeText('Belum ada data absensi pada periode ini.');
+    }
+
+    public function test_rekap_rentang_bebas_menyaring_sesuai_dari_sampai(): void
+    {
+        $this->insertAttendanceOn('2021.05.0302', '2026-05-15', '07:50:00');
+
+        // assertDontSeeText('Rina Marlina') TIDAK BISA dipakai di sini — dia
+        // aktor yang login, namanya SELALU tampil di sidebar apa pun isi
+        // tabel rekapnya. Cek pesan kosong sebagai gantinya.
+        $luar = $this->actingAs($this->userWithNrp('2021.05.0302'))
+            ->get('/pegawai/absensi?tampilan=rentang&dari=2026-06-01&sampai=2026-06-30');
+        $luar->assertOk();
+        $luar->assertSeeText('Belum ada data absensi pada periode ini.');
+
+        $dalam = $this->actingAs($this->userWithNrp('2021.05.0302'))
+            ->get('/pegawai/absensi?tampilan=rentang&dari=2026-05-01&sampai=2026-05-31');
+        $dalam->assertOk();
+        $dalam->assertSeeText('Rina Marlina');
+    }
+
+    private function insertAttendanceOn(string $nrp, string $workDate, string $jamMasuk): void
+    {
+        $employeeId = DB::table('emp_employees')->where('nrp', $nrp)->value('id');
+
+        DB::table('att_attendance_records')->insert([
+            'id' => (string) Uuid7::generate(),
+            'employee_id' => $employeeId,
+            'work_date' => $workDate,
+            'check_in_at' => new DateTimeImmutable("{$workDate} {$jamMasuk}"),
+            'check_in_source' => 'fingerprint',
+            'status' => 'hadir',
+            'created_at' => now(),
+            'updated_at' => now(),
+            'version' => 1,
+        ]);
+    }
+
     private function insertAttendance(string $nrp, string $jamMasuk): void
     {
         $employeeId = DB::table('emp_employees')->where('nrp', $nrp)->value('id');

@@ -5,13 +5,16 @@ declare(strict_types=1);
 namespace App\Interfaces\Http\Controllers;
 
 use App\Core\Domain\Uuid7;
+use App\Models\User;
 use App\Modules\Access\Contracts\CurrentActor;
 use App\Modules\Access\Domain\AccessPolicy;
 use App\Modules\Access\Domain\OrganizationalScope;
 use App\Modules\Access\Domain\Role;
 use App\Modules\Employee\Contracts\EmployeeRepository;
 use App\Modules\Leave\Application\ReleaseLeaveBalance;
+use App\Notifications\RequestDecided;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -107,7 +110,7 @@ final class LeaveApprovalQueueController extends Controller
     /** Untuk badge notifikasi sidebar (ComputeNavigationBadgeCounts) — query+filter SAMA seperti index(), hanya count. */
     public function pendingCount(): int
     {
-        if (! ($this->actor->hasRole(Role::AtasanLangsung->value) || $this->actor->hasRole(Role::PimpinanKantor->value) || $this->actor->hasRole(Role::Auditor->value))) {
+        if (! $this->actor->hasPermission('leave-approval.view')) {
             return 0;
         }
 
@@ -126,19 +129,21 @@ final class LeaveApprovalQueueController extends Controller
 
     public function approve(string $id): RedirectResponse
     {
-        return $this->decide($id, 'approve', 'Pengajuan cuti disetujui.');
+        return $this->decide($id, 'approve', 'Pengajuan cuti disetujui.', null);
     }
 
-    public function reject(string $id): RedirectResponse
+    public function reject(string $id, Request $request): RedirectResponse
     {
-        return $this->decide($id, 'reject', 'Pengajuan cuti ditolak.');
+        $note = $request->string('catatan')->toString();
+
+        return $this->decide($id, 'reject', 'Pengajuan cuti ditolak.', $note !== '' ? $note : null);
     }
 
-    private function decide(string $id, string $decision, string $successMessage): RedirectResponse
+    private function decide(string $id, string $decision, string $successMessage, ?string $note): RedirectResponse
     {
         $request = DB::table('leave_requests as r')
             ->join('emp_employees as e', 'e.id', '=', 'r.employee_id')
-            ->select('r.id', 'r.status', 'r.leave_type', 'r.atasan_approver_id', 'e.id as employee_id', 'e.office_id')
+            ->select('r.id', 'r.request_number', 'r.status', 'r.leave_type', 'r.atasan_approver_id', 'e.id as employee_id', 'e.office_id')
             ->where('r.id', $id)
             ->first();
 
@@ -163,9 +168,13 @@ final class LeaveApprovalQueueController extends Controller
 
         $now = now();
         $updates = ['updated_at' => $now];
+        // Notifikasi HANYA pada keputusan FINAL — tolak (tahap mana pun,
+        // selalu final untuk Cuti) atau setuju tahap PIMPINAN (tahap
+        // atasan hanya transisi antara, belum keputusan akhir).
+        $isFinalDecision = $decision === 'reject' || $tier === 'pimpinan';
 
         if ($decision === 'reject') {
-            $updates += ['status' => 'rejected', 'approver_id' => $this->actor->employeeId(), 'decided_at' => $now];
+            $updates += ['status' => 'rejected', 'approver_id' => $this->actor->employeeId(), 'decided_at' => $now, 'decision_note' => $note];
         } elseif ($tier === 'atasan') {
             $updates += ['status' => 'pending_pimpinan', 'atasan_approver_id' => $this->actor->employeeId(), 'atasan_decided_at' => $now];
         } else {
@@ -189,6 +198,10 @@ final class LeaveApprovalQueueController extends Controller
             $this->triggerBekalCutiIfFirstThisYear($id, $request->employee_id);
         }
 
+        if ($affected > 0 && $isFinalDecision) {
+            $this->notifyRequester($request->employee_id, $request->request_number, $decision === 'approve', $note);
+        }
+
         return redirect()
             ->route('admin.leave-approval-queue')
             ->with($affected > 0 ? 'sukses' : 'gagal', $affected > 0
@@ -207,7 +220,14 @@ final class LeaveApprovalQueueController extends Controller
      */
     private function triggerBekalCutiIfFirstThisYear(string $leaveRequestId, string $employeeId): void
     {
-        $year = (int) date('Y');
+        // Tahun HARUS diambil dari start_date pengajuan, BUKAN "sekarang"
+        // (saat diputuskan) — leave_balances/bucket_debits dikunci per
+        // tahun start_date oleh SubmitLeaveRequest. Pengajuan yang mulai
+        // akhir Desember tapi baru diputus awal Januari akan salah tahun
+        // (dan gagal menemukan konsumsi current_year yang sebenarnya ada)
+        // kalau memakai date('Y') di sini (bug ditemukan lewat audit kode).
+        $startDate = DB::table('leave_requests')->where('id', $leaveRequestId)->value('start_date');
+        $year = (int) (new \DateTimeImmutable((string) $startDate))->format('Y');
 
         $alreadyTriggered = DB::table('pay_bekal_cuti_disbursements')
             ->where('employee_id', $employeeId)
@@ -284,12 +304,22 @@ final class LeaveApprovalQueueController extends Controller
 
     private function assertHasAnyRelevantRole(): void
     {
+        // Gerbang akses SESUNGGUHNYA sudah middleware `permission:leave-approval.view`
+        // di routes/web.php (diatur lewat Peta Peran) — cek di sini cermin permission
+        // itu, BUKAN daftar role hardcode terpisah (lihat catatan sama di
+        // ApprovalQueueController::assertHasAnyRelevantRole()).
         abort_unless(
-            $this->actor->hasRole(Role::AtasanLangsung->value)
-                || $this->actor->hasRole(Role::PimpinanKantor->value)
-                || $this->actor->hasRole(Role::Auditor->value),
+            $this->actor->hasPermission('leave-approval.view'),
             403,
             'Anda tidak memiliki peran yang berwenang melihat antrean ini.'
         );
+    }
+
+    /** Melewati pengiriman bila pegawai tidak (lagi) punya akun login — bukan kondisi yang perlu menggagalkan keputusan. */
+    private function notifyRequester(string $employeeId, string $requestNumber, bool $approved, ?string $reason): void
+    {
+        $user = User::query()->where('employee_id', $employeeId)->first();
+
+        $user?->notify(new RequestDecided($requestNumber, 'cuti', $approved, $reason));
     }
 }

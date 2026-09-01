@@ -19,6 +19,19 @@ namespace App\Modules\Access\Domain;
  * MENGGANTIKAN RoleFeatureMap (DIHAPUS) yang dulu memetakan Role→daftar
  * fitur secara statis — sekarang arahnya terbalik (permission→label)
  * karena keputusan "role mana punya izin apa" sudah pindah ke data.
+ *
+ * Kategori di sini SENGAJA disamakan per-MODUL dengan pengelompokan
+ * sidebar (resources/views/layouts/app.blade.php — Absensi/Cuti/Lembur/
+ * SPPD/Izin/Tukar Shift/Payroll/LMS/Kepegawaian/Pengawasan/Admin
+ * Sistem/Admin Sistem (IT)), BUKAN lagi dikelompokkan lintas-modul
+ * ("Persetujuan"/"Pencairan/Pembayaran"/"SDM" gabungan) seperti
+ * sebelumnya — supaya admin yang mengelola izin satu modul (mis. SPPD)
+ * menemukan SEMUA permission modul itu (approval MAUPUN pencairan)
+ * dalam satu kelompok yang sama, mencerminkan cara sidebar sekarang
+ * mengelompokkan menu. Dua sistem ini tetap independen secara data
+ * (kategori di sini murni label tampilan, tidak dibaca sidebar atau
+ * sebaliknya) — hanya SELARAS agar tidak membingungkan admin yang
+ * sudah terbiasa dengan pengelompokan sidebar.
  */
 final readonly class PermissionCatalog
 {
@@ -26,41 +39,46 @@ final readonly class PermissionCatalog
     public static function all(): array
     {
         return [
-            'overtime-approval.view' => ['Antrean Lembur — lihat', 'Persetujuan'],
-            'overtime-approval.decide' => ['Antrean Lembur — putuskan', 'Persetujuan'],
-            'overtime-disbursement.hc' => ['Pembayaran Lembur (Kantor Pusat)', 'Pencairan/Pembayaran'],
-            'leave-approval.view' => ['Antrean Cuti — lihat', 'Persetujuan'],
-            'leave-approval.decide' => ['Antrean Cuti — putuskan', 'Persetujuan'],
-            'bekal-cuti-disbursement.hc' => ['Pencairan Bekal Cuti (bank-wide)', 'Pencairan/Pembayaran'],
-            'payroll-approval.manage' => ['Persetujuan Payroll (generate/setujui/tolak/buka kembali)', 'Persetujuan'],
-            'sppd-approval.view' => ['Antrean SPPD — lihat', 'Persetujuan'],
-            'sppd-approval.decide' => ['Antrean SPPD — putuskan', 'Persetujuan'],
-            'shift-swap-approval.view' => ['Antrean Tukar Shift — lihat', 'Persetujuan'],
-            'shift-swap-approval.decide' => ['Antrean Tukar Shift — putuskan', 'Persetujuan'],
-            'outside-attendance-approval.view' => ['Antrean Absen Luar Kantor — lihat', 'Persetujuan'],
-            'outside-attendance-approval.decide' => ['Antrean Absen Luar Kantor — putuskan', 'Persetujuan'],
-            'sppd-disbursement.hc.view' => ['Pencairan SPPD (bank-wide) — lihat', 'Pencairan/Pembayaran'],
-            'sppd-disbursement.hc.decide' => ['Pencairan SPPD (bank-wide) — cairkan', 'Pencairan/Pembayaran'],
-            'employee-approval.manage' => ['Persetujuan Data Pegawai (profil + pegawai baru)', 'Persetujuan'],
-            'employee-directory.manage' => ['Data Pegawai (kantor sendiri)', 'SDM'],
-            'employee-records.manage' => ['Riwayat Pegawai (keluarga/kerja/kesehatan)', 'SDM'],
-            'decision-letter.manage' => ['Surat Keputusan (SK)', 'SDM'],
-            'attendance-recap.view' => ['Rekap Absensi', 'SDM'],
-            'payroll-deduction.manage' => ['Potongan Gaji', 'SDM'],
-            'overtime-recap.view' => ['Rekap Biaya Lembur', 'SDM'],
-            'overtime-disbursement.branch' => ['Pembayaran Lembur (kantor sendiri)', 'Pencairan/Pembayaran'],
-            'bekal-cuti-disbursement.branch' => ['Pencairan Bekal Cuti (kantor sendiri)', 'Pencairan/Pembayaran'],
-            'sppd-disbursement.branch' => ['Pencairan SPPD (kantor sendiri)', 'Pencairan/Pembayaran'],
+            'overtime-approval.view' => ['Antrean Lembur — lihat', 'Lembur'],
+            'overtime-approval.decide' => ['Antrean Lembur — putuskan', 'Lembur'],
+            'overtime-disbursement.hc' => ['Pembayaran Lembur (Kantor Pusat)', 'Lembur'],
+            'overtime-recap.view' => ['Rekap Biaya Lembur', 'Lembur'],
+            'overtime-disbursement.branch' => ['Pembayaran Lembur (kantor sendiri)', 'Lembur'],
+            'leave-approval.view' => ['Antrean Cuti — lihat', 'Cuti'],
+            'leave-approval.decide' => ['Antrean Cuti — putuskan', 'Cuti'],
+            'bekal-cuti-disbursement.hc' => ['Pencairan Bekal Cuti (bank-wide)', 'Cuti'],
+            'bekal-cuti-disbursement.branch' => ['Pencairan Bekal Cuti (kantor sendiri)', 'Cuti'],
+            'payroll-approval.manage' => ['Persetujuan Payroll (generate/setujui/tolak/buka kembali)', 'Payroll'],
+            'payroll-deduction.manage' => ['Potongan Gaji', 'Payroll'],
+            'sppd-approval.view' => ['Antrean SPPD — lihat', 'SPPD'],
+            'sppd-approval.decide' => ['Antrean SPPD — putuskan', 'SPPD'],
+            'sppd-disbursement.hc.view' => ['Pencairan SPPD (bank-wide) — lihat', 'SPPD'],
+            'sppd-disbursement.hc.decide' => ['Pencairan SPPD (bank-wide) — cairkan', 'SPPD'],
+            'sppd-disbursement.branch' => ['Pencairan SPPD (kantor sendiri)', 'SPPD'],
+            'sppd-memo.manage' => ['SPPD Massal — input memo, cetak Surat Jalan & Rincian Lumpsum', 'SPPD'],
+            'sppd-payment-batch.hc' => ['Pembayaran SPPD Massal (Kantor Pusat)', 'SPPD'],
+            'sppd-payment-batch.branch' => ['Pembayaran SPPD Massal (kantor sendiri)', 'SPPD'],
+            'izin-approval.view' => ['Antrean Izin Tidak Masuk Bekerja — lihat', 'Izin'],
+            'izin-approval.decide' => ['Antrean Izin Tidak Masuk Bekerja — putuskan', 'Izin'],
+            'shift-swap-approval.view' => ['Antrean Tukar Shift — lihat', 'Tukar Shift'],
+            'shift-swap-approval.decide' => ['Antrean Tukar Shift — putuskan', 'Tukar Shift'],
+            'outside-attendance-approval.view' => ['Antrean Absen Luar Kantor — lihat', 'Absensi'],
+            'outside-attendance-approval.decide' => ['Antrean Absen Luar Kantor — putuskan', 'Absensi'],
+            'attendance-recap.view' => ['Rekap Absensi', 'Absensi'],
+            'employee-approval.manage' => ['Persetujuan Data Pegawai (profil + pegawai baru)', 'Kepegawaian'],
+            'employee-directory.manage' => ['Data Pegawai (kantor sendiri)', 'Kepegawaian'],
+            'employee-records.manage' => ['Riwayat Pegawai (keluarga/kerja/kesehatan)', 'Kepegawaian'],
+            'decision-letter.manage' => ['Surat Keputusan (SK)', 'Kepegawaian'],
+            'hc-dashboard.view' => ['Dasbor HC', 'Kepegawaian'],
+            'branch-dashboard.view' => ['Dasbor Cabang (kantor sendiri)', 'Kepegawaian'],
+            'employee-position-record.view' => ['Record Pegawai — riwayat posisi per bulan', 'Kepegawaian'],
+            'lms-catalog.manage' => ['LMS — kelola katalog kursus, jadwal kelas, catat kelulusan/nilai', 'LMS'],
+            'lms-enrollment-approval.view' => ['Antrean Pendaftaran Pelatihan — lihat', 'LMS'],
+            'lms-enrollment-approval.decide' => ['Antrean Pendaftaran Pelatihan — putuskan', 'LMS'],
             'audit-log.view' => ['Log Audit', 'Pengawasan'],
-            'hc-dashboard.view' => ['Dasbor HC', 'Dasbor'],
-            'org-chart.view' => ['Struktur Organisasi', 'Referensi'],
-            'sysadmin-it.manage' => ['Admin Sistem — IT (parameter, skala gaji, tarif SPPD, geofence, absensi mesin, pegawai maker)', 'Admin Sistem'],
-            'sysadmin-content.manage' => ['Admin Sistem — konten bersama (kalender libur, pola shift, penugasan shift, formasi kantor)', 'Admin Sistem'],
-            'lms-catalog.manage' => ['LMS — kelola katalog kursus, jadwal kelas, catat kelulusan/nilai', 'SDM'],
-            'lms-enrollment-approval.view' => ['Antrean Pendaftaran Pelatihan — lihat', 'Persetujuan'],
-            'lms-enrollment-approval.decide' => ['Antrean Pendaftaran Pelatihan — putuskan', 'Persetujuan'],
-            'izin-approval.view' => ['Antrean Izin Tidak Masuk Bekerja — lihat', 'Persetujuan'],
-            'izin-approval.decide' => ['Antrean Izin Tidak Masuk Bekerja — putuskan', 'Persetujuan'],
+            'org-chart.view' => ['Struktur Organisasi', 'Admin Sistem'],
+            'sysadmin-content.manage' => ['Admin Sistem — konten bersama (kalender libur, pola shift, penugasan shift, formasi kantor, menu Aplikasi Mobile)', 'Admin Sistem'],
+            'sysadmin-it.manage' => ['Admin Sistem — IT (parameter, skala gaji, tarif SPPD, geofence, absensi mesin, pegawai maker)', 'Admin Sistem (IT)'],
         ];
     }
 

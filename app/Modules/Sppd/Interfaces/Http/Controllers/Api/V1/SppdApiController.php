@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Sppd\Interfaces\Http\Controllers\Api\V1;
 
+use App\Modules\Sppd\Application\CancelSppdRequest;
 use App\Modules\Sppd\Application\SubmitSppdRequest;
 use App\Modules\Sppd\Domain\JabatanTierNotMapped;
 use App\Modules\Sppd\Domain\RadiusBand;
@@ -12,6 +13,7 @@ use App\Modules\Sppd\Domain\TripCategory;
 use App\Modules\Sppd\Interfaces\Http\Requests\SubmitSppdRequestForm;
 use App\Shared\Audit\Domain\AuditActor;
 use DateTimeImmutable;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,7 +26,10 @@ use InvalidArgumentException;
  */
 final class SppdApiController
 {
-    public function __construct(private readonly SubmitSppdRequest $submit) {}
+    public function __construct(
+        private readonly SubmitSppdRequest $submit,
+        private readonly CancelSppdRequest $cancel,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -68,5 +73,29 @@ final class SppdApiController
         }
 
         return response()->json(['request_number' => $requestNumber], 201);
+    }
+
+    public function cancel(Request $request, string $id): JsonResponse
+    {
+        $user = $request->user();
+
+        abort_if($user === null || $user->employee_id === null, 403, 'Akun ini belum ditautkan ke data pegawai.');
+
+        try {
+            $this->cancel->handle(
+                sppdRequestId: $id,
+                employeeId: $user->employee_id,
+                actor: new AuditActor(
+                    actorId: $user->employee_id,
+                    actorRole: implode(',', $user->getRoleNames()->all()),
+                    ipAddress: $request->ip(),
+                    userAgent: $request->userAgent(),
+                ),
+            );
+        } catch (DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['message' => 'Pengajuan SPPD berhasil dibatalkan.']);
     }
 }

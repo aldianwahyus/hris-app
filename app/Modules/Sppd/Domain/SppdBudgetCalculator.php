@@ -46,7 +46,7 @@ final readonly class SppdBudgetCalculator
 
             // Jarak Pendek tidak mengenal uang saku/hotel/angkutan (§III.A)
             // — pulang-pergi dalam hari yang sama, bukan menginap.
-            return new SppdBudgetResult($uangMakan, Money::zero(), null, null, null, $category->mataUang());
+            return new SppdBudgetResult($uangMakan, Money::zero(), null, null, null, null, $category->mataUang());
         }
 
         if ($tier === null) {
@@ -57,16 +57,18 @@ final readonly class SppdBudgetCalculator
         $uangSaku = $this->tariffs->amountFor(SppdTariffComponent::UangSaku, $category, $tier, null, $asOf)->multiplyBy($totalDays);
 
         $hotel = null;
+        $hotelKompensasi = null;
         $angkutanSetempat = null;
         $transportasiTujuan = null;
 
         if ($category->memilikiPlafonAtCost()) {
             $hotel = $this->tariffs->amountFor(SppdTariffComponent::HotelCap, $category, $tier, null, $asOf)->multiplyBy($totalDays);
+            $hotelKompensasi = $this->tariffs->amountFor(SppdTariffComponent::HotelCompensation, $category, $tier, null, $asOf)->multiplyBy($totalDays);
             $angkutanSetempat = $this->tariffs->amountFor(SppdTariffComponent::LocalTransportCap, $category, $tier, null, $asOf)->multiplyBy($totalDays);
             // TIDAK dikalikan hari — satu kali PP (lihat catatan kelas).
             $transportasiTujuan = $this->tariffs->amountFor(SppdTariffComponent::DestinationTransportCap, $category, $tier, null, $asOf);
         }
 
-        return new SppdBudgetResult($uangMakan, $uangSaku, $hotel, $angkutanSetempat, $transportasiTujuan, $category->mataUang());
+        return new SppdBudgetResult($uangMakan, $uangSaku, $hotel, $hotelKompensasi, $angkutanSetempat, $transportasiTujuan, $category->mataUang());
     }
 }

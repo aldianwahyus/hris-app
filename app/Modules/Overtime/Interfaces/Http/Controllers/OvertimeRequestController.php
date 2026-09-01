@@ -6,6 +6,7 @@ namespace App\Modules\Overtime\Interfaces\Http\Controllers;
 
 use App\Modules\Access\Contracts\CurrentActor;
 use App\Modules\Attendance\Contracts\AttendanceRepository;
+use App\Modules\Overtime\Application\CancelOvertimeRequest;
 use App\Modules\Overtime\Application\SubmitOvertimeRequest;
 use App\Modules\Overtime\Domain\NoOvertimeEvidence;
 use App\Modules\Overtime\Domain\OvertimeType;
@@ -27,7 +28,47 @@ final class OvertimeRequestController
         private readonly SubmitOvertimeRequest $submit,
         private readonly AttendanceRepository $attendance,
         private readonly CurrentActor $actor,
+        private readonly CancelOvertimeRequest $cancel,
     ) {}
+
+    /** Riwayat Lembur Saya — SEMUA pengajuan milik pegawai yang login. */
+    public function history(Request $request): View
+    {
+        $user = $request->user();
+
+        abort_if($user === null || $user->employee_id === null, 403, 'Akun ini belum ditautkan ke data pegawai.');
+
+        $requests = DB::table('ovt_requests')
+            ->where('employee_id', $user->employee_id)
+            ->orderByDesc('created_at')
+            ->paginate(20);
+
+        return view('overtime.history', compact('requests'));
+    }
+
+    public function cancelRequest(Request $request, string $id): RedirectResponse
+    {
+        $user = $request->user();
+
+        abort_if($user === null || $user->employee_id === null, 403, 'Akun ini belum ditautkan ke data pegawai.');
+
+        try {
+            $this->cancel->handle(
+                overtimeRequestId: $id,
+                employeeId: $user->employee_id,
+                actor: new AuditActor(
+                    actorId: $user->employee_id,
+                    actorRole: implode(',', $user->getRoleNames()->all()),
+                    ipAddress: $request->ip(),
+                    userAgent: $request->userAgent(),
+                ),
+            );
+        } catch (DomainException $e) {
+            return back()->with('gagal', $e->getMessage());
+        }
+
+        return back()->with('sukses', 'Pengajuan lembur berhasil dibatalkan.');
+    }
 
     /**
      * Pratinjau bukti lembur (jika tanggal sudah dipilih) dihitung ulang

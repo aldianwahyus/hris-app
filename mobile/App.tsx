@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Platform, Text, TextInput } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
+import { MobileMenuProvider } from './src/context/MobileMenuContext';
 import { ToastProvider } from './src/context/ToastContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { fonts } from './src/theme';
@@ -43,7 +44,9 @@ export default function App() {
     <SafeAreaProvider>
       <ToastProvider>
         <AuthProvider>
-          <RootNavigator />
+          <MobileMenuProvider>
+            <RootNavigator />
+          </MobileMenuProvider>
         </AuthProvider>
       </ToastProvider>
       <StatusBar style="light" />

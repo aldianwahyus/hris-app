@@ -235,7 +235,23 @@ final class SystemAdminEmployeeController extends Controller
             'kontak_darurat_telepon' => ['nullable', 'string', 'max:20'],
             'pendidikan_terakhir' => ['nullable', 'string', 'max:30'],
             'pendidikan_jurusan' => ['nullable', 'string', 'max:100'],
+            'photo' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
         ]);
+
+        // Foto diunggah SEKALI di sini (kalau ada) — path-nya (BUKAN
+        // berkas mentahnya, tidak bisa di-JSON-kan) yang masuk ke
+        // proposed_data, persis pola dokumen SK massal
+        // (DecisionLetterController::store()). Kunci 'photo' dibuang
+        // supaya tidak ikut ke proposedData sebagai objek UploadedFile.
+        if ($request->hasFile('photo')) {
+            $stored = $request->file('photo')->store('pegawai/foto', 's3');
+
+            abort_if($stored === false, 500, 'Gagal mengunggah foto — coba lagi.');
+
+            $validated['photo_path'] = $stored;
+        }
+
+        unset($validated['photo']);
 
         // Aturan SAMA ProfileChangeValidator: status tetap wajib punya
         // tanggal jadi pegawai tetap — belum berlaku otomatis di jalur

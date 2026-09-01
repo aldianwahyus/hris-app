@@ -8,7 +8,9 @@ use App\Models\User;
 use App\Modules\Employee\Application\SubmitNewEmployeeRequest;
 use App\Shared\Audit\Domain\AuditActor;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -314,6 +316,40 @@ final class SystemAdminEmployeeTest extends TestCase
             ->get(['proposed_data'])
             ->filter(fn ($row) => (json_decode($row->proposed_data, true)['nrp'] ?? null) === '2099.01.0011')
             ->count());
+    }
+
+    public function test_foto_pegawai_baru_ikut_tersimpan_setelah_disetujui(): void
+    {
+        Storage::fake('s3');
+        $sysadmin = $this->userWithNrp('SYSADMIN');
+
+        $response = $this->actingAs($sysadmin)->post('/admin/sistem/pegawai', [
+            'nrp' => '2099.01.0012',
+            'full_name' => 'Uji Foto Pegawai',
+            'join_date' => '2026-01-01',
+            'employment_status' => 'tetap',
+            'permanent_date' => '2026-01-01',
+            'office_id' => DB::table('md_offices')->where('code', 'KC-MTR')->value('id'),
+            'position_id' => DB::table('md_positions')->where('code', 'OFC')->value('id'),
+            'photo' => UploadedFile::fake()->image('foto-pegawai-baru.jpg'),
+        ]);
+
+        $response->assertSessionHas('sukses');
+
+        $requestRow = DB::table('emp_new_employee_requests')->where('status', 'pending')
+            ->get(['id', 'proposed_data'])
+            ->first(fn ($row) => (json_decode($row->proposed_data, true)['nrp'] ?? null) === '2099.01.0012');
+        $this->assertNotNull($requestRow);
+
+        $proposedPhotoPath = json_decode($requestRow->proposed_data, true)['photo_path'];
+        $this->assertNotNull($proposedPhotoPath);
+        Storage::disk('s3')->assertExists($proposedPhotoPath);
+
+        $hrApprover = $this->userWithNrp('2014.02.0061');
+        $this->actingAs($hrApprover)->post("/persetujuan/pegawai-baru/{$requestRow->id}/setujui")->assertRedirect();
+
+        $employee = DB::table('emp_employees')->where('nrp', '2099.01.0012')->first();
+        $this->assertSame($proposedPhotoPath, $employee->photo_path);
     }
 
     public function test_hr_approver_tidak_bisa_menyetujui_pengajuan_pegawai_baru_miliknya_sendiri(): void

@@ -18,7 +18,9 @@ tbody tr:last-child td{border-bottom:0}
 .status.pending{background:var(--emas-muda);color:#7A5F0B}
 .status.approved{background:var(--hijau-muda);color:var(--hijau-tua)}
 .status.rejected{background:var(--merah-muda);color:var(--merah)}
+.status.cancelled{background:#EDEDED;color:#6B6B6B}
 .kosong{padding:24px;text-align:center;color:var(--teks-lemah);font-size:13px}
+.alasan{font-size:11px;color:var(--merah);margin-top:4px;max-width:220px}
 .tautan{color:var(--hijau);font-weight:600;text-decoration:none}
 .tautan:hover{text-decoration:underline}
 @endsection
@@ -98,7 +100,7 @@ tbody tr:last-child td{border-bottom:0}
       <tbody>
         @php
           $labelKategori = ['sakit' => 'Sakit', 'keperluan_keluarga' => 'Keperluan Keluarga', 'lainnya' => 'Lainnya'];
-          $labelStatus = ['pending' => 'Menunggu', 'approved' => 'Disetujui', 'rejected' => 'Ditolak'];
+          $labelStatus = ['pending' => 'Menunggu', 'approved' => 'Disetujui', 'rejected' => 'Ditolak', 'cancelled' => 'Dibatalkan'];
         @endphp
         @forelse ($riwayat as $r)
           <tr>
@@ -117,7 +119,18 @@ tbody tr:last-child td{border-bottom:0}
                 —
               @endif
             </td>
-            <td><span class="status {{ $r->status }}">{{ $labelStatus[$r->status] ?? $r->status }}</span></td>
+            <td>
+              <span class="status {{ $r->status }}">{{ $labelStatus[$r->status] ?? $r->status }}</span>
+              @if ($r->status === 'rejected' && ! empty($r->decision_note))
+                <div class="alasan">Alasan: {{ $r->decision_note }}</div>
+              @endif
+              @if ($r->status === 'pending')
+                <form method="POST" action="{{ route('izin.cancel', $r->id) }}" onsubmit="return confirm('Batalkan pengajuan izin ini?')" style="margin-top:6px">
+                  @csrf
+                  <button type="submit" class="mini">Batalkan</button>
+                </form>
+              @endif
+            </td>
           </tr>
         @empty
           <tr>

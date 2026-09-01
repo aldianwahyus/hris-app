@@ -36,6 +36,16 @@ export interface LeaveRequestRow extends RequestRow {
   start_date: string;
   end_date: string;
   reason: string | null;
+  decision_note: string | null;
+}
+
+// sisa_cuti = jumlah kantong tahun berjalan + bawaan tahun lalu (SAMA
+// logika LeaveApiController::remainingBalance() backend, LeaveBucket::
+// remaining() per kantong) — TIDAK termasuk kantong tahun-tahun lain
+// yang sudah kedaluwarsa, konsisten dengan basis perhitungan saat
+// mengajukan cuti.
+export interface LeaveListResponse extends ListResponse<LeaveRequestRow> {
+  sisa_cuti: number;
 }
 
 export interface OvertimeRequestRow extends RequestRow {
@@ -43,6 +53,7 @@ export interface OvertimeRequestRow extends RequestRow {
   work_date: string;
   overtime_type: string;
   amount_cents: number | null;
+  decision_note: string | null;
 }
 
 export interface SppdRequestRow extends RequestRow {
@@ -50,6 +61,7 @@ export interface SppdRequestRow extends RequestRow {
   destination: string;
   start_date: string;
   end_date: string;
+  decision_note: string | null;
 }
 
 // Izin Tidak Masuk Bekerja — TERPISAH dari Cuti (tidak memotong saldo
@@ -64,6 +76,7 @@ export interface IzinRequestRow extends RequestRow {
   reason: string;
   attachment_path: string | null;
   attachment_original_name: string | null;
+  decision_note: string | null;
 }
 
 // Istirahat/Kembali OPSIONAL (boleh langsung Masuk→Pulang) — TAPI begitu
@@ -91,13 +104,27 @@ export interface AttendanceSubmitResponse {
   status: string | null;
 }
 
+interface PayslipLineItem {
+  deduction_type?: string;
+  addition_type?: string;
+  amount_cents: number;
+  note: string | null;
+}
+
 export interface PayslipRow {
   id: string;
   period: string;
-  // Take-home SEBAGIAN — komponen di pending_components (mis. PPh21,
-  // Tunjangan Kinerja/Kemahalan) belum terhitung saat slip ini dibuat.
-  // Bukan nominal bersih final; lihat pay_payslips.pending_components.
+  // take_home_partial_cents TIDAK PERNAH memutasi lewat potongan/
+  // tambahan ad-hoc (lihat komentar PayslipApiController) — JANGAN
+  // dipakai untuk tampilan THP, itu sebabnya "partial". take_home_cents
+  // SUDAH memperhitungkan deductions/additions di bawah, PERSIS sama
+  // dengan angka pada PDF/halaman web — pakai field INI untuk tampilan.
   take_home_partial_cents: number;
+  take_home_cents: number;
+  deductions: PayslipLineItem[];
+  additions: PayslipLineItem[];
+  // Komponen LAIN yang belum terhitung (mis. PPh21 belum final) — tidak
+  // ada hubungannya dengan deductions/additions ad-hoc di atas.
   // PayslipApiController memakai DB::table() (query builder), BUKAN
   // model Eloquent — kolom json TIDAK otomatis di-decode seperti kolom
   // 'data' pada NotificationRow (yang lewat relasi Eloquent). Ini
@@ -122,4 +149,16 @@ export interface NotificationRow {
 export interface NotificationListResponse {
   data: NotificationRow[];
   unread_count: number;
+}
+
+// Menu Aplikasi Mobile yang boleh tampil — dikendalikan SYSADMIN/Admin HC
+// lewat halaman web (bank-wide, bukan per peran). Kunci di sini WAJIB
+// cocok persis dengan mobile_menu_items.key (lihat migrasi
+// create_mobile_menu_items) — 'absensi' | 'cuti' | 'lembur' | 'sppd' |
+// 'izin' | 'slip_gaji' | 'notifikasi'. Index signature (bukan enum
+// tertutup) SENGAJA: menu baru yang ditambahkan backend nanti tidak
+// memutus tipe di sini, dan MobileMenuContext memperlakukan kunci yang
+// tidak dikenal sebagai TETAP TAMPIL (bawaan aman).
+export interface MobileMenuConfigResponse {
+  data: Record<string, boolean>;
 }

@@ -52,4 +52,20 @@ enum TripCategory: string
     {
         return $this === self::JarakPendek;
     }
+
+    /**
+     * Ketentuan transit H-1/H+1 (§III.B.3) dan konsumsi ditanggung
+     * panitia (§III.B.4) — Bab III.B BPP secara eksplisit hanya berlaku
+     * untuk perjalanan Jarak Jauh, TIDAK ADA aturan setara untuk Jarak
+     * Pendek (tarif seragam per radius, bukan per hari) maupun Luar
+     * Negeri/Pindah/Detasir (bab terpisah, tanpa rujukan §III.B sama
+     * sekali). Mencentang komponen ini di luar dua kategori Jarak Jauh
+     * adalah kesalahan input, bukan pilihan yang sah (bug ditemukan
+     * lewat audit kode — SubmitSppdMemoGroup sebelumnya tidak menyaring
+     * ini sama sekali).
+     */
+    public function berlakuKetentuanTransitDanKonsumsiBpp(): bool
+    {
+        return in_array($this, [self::JarakJauhKeluarProvinsi, self::JarakJauhDalamProvinsi], true);
+    }
 }

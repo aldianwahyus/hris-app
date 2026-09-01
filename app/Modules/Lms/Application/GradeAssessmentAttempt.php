@@ -45,7 +45,38 @@ final class GradeAssessmentAttempt
                 throw new InvalidArgumentException('Asesmen ini tidak sedang menunggu penilaian.');
             }
 
+            // Penilai TIDAK BOLEH menilai pengerjaannya sendiri — tanpa
+            // guard ini, siapa pun yang punya izin lms-catalog.manage bisa
+            // mengerjakan asesmen sebagai pegawai ESS lalu meluluskan
+            // dirinya sendiri tanpa peninjauan independen sama sekali (bug
+            // ditemukan lewat audit kode).
+            if ($assessorId === $attempt->employee_id) {
+                throw new InvalidArgumentException('Anda tidak dapat menilai pengerjaan asesmen milik Anda sendiri.');
+            }
+
             $now = new DateTimeImmutable;
+
+            // Skor esai TIDAK BOLEH melebihi bobot soal — atribut
+            // "max" pada input HTML hanya kosmetik di sisi klien, bisa
+            // dilewati lewat POST langsung; tanpa validasi ini skor total
+            // (dan status lulus/tidak lulus) bisa digelembungkan secara
+            // tidak sengaja (salah ketik) maupun sengaja (bug ditemukan
+            // lewat audit kode).
+            $weights = DB::table('lms_assessment_questions')
+                ->whereIn('id', array_keys($scoresByQuestionId))
+                ->pluck('score_weight', 'id');
+
+            foreach ($scoresByQuestionId as $questionId => $score) {
+                $weight = $weights[$questionId] ?? null;
+
+                if ($weight === null) {
+                    throw new InvalidArgumentException('Soal esai tidak ditemukan untuk asesmen ini.');
+                }
+
+                if ((float) $score < 0 || (float) $score > (float) $weight) {
+                    throw new InvalidArgumentException("Skor tidak boleh negatif atau melebihi bobot maksimal soal ({$weight}).");
+                }
+            }
 
             foreach ($scoresByQuestionId as $questionId => $score) {
                 DB::table('lms_assessment_answers')

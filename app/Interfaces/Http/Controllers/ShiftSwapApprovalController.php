@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace App\Interfaces\Http\Controllers;
 
+use App\Models\User;
 use App\Modules\Access\Contracts\CurrentActor;
 use App\Modules\Access\Domain\AccessPolicy;
 use App\Modules\Access\Domain\OrganizationalScope;
 use App\Modules\Access\Domain\Role;
 use App\Modules\Employee\Contracts\EmployeeRepository;
+use App\Modules\Shift\Application\ApplyShiftSwap;
+use App\Notifications\RequestDecided;
+use DateTimeImmutable;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -29,14 +34,16 @@ final class ShiftSwapApprovalController extends Controller
     public function __construct(
         private readonly CurrentActor $actor,
         private readonly EmployeeRepository $employees,
+        private readonly ApplyShiftSwap $applySwap,
     ) {}
 
     public function index(): View
     {
-        $isAtasanLangsung = $this->actor->hasRole(Role::AtasanLangsung->value);
-        $isAuditor = $this->actor->hasRole(Role::Auditor->value);
-
-        abort_unless($isAtasanLangsung || $isAuditor, 403, 'Anda tidak memiliki peran yang berwenang melihat antrean ini.');
+        // Gerbang akses SESUNGGUHNYA sudah middleware `permission:shift-swap-approval.view`
+        // di routes/web.php (diatur lewat Peta Peran) — cek di sini cermin permission
+        // itu, BUKAN daftar role hardcode terpisah (lihat catatan sama di
+        // ApprovalQueueController::assertHasAnyRelevantRole()).
+        abort_unless($this->actor->hasPermission('shift-swap-approval.view'), 403, 'Anda tidak memiliki peran yang berwenang melihat antrean ini.');
 
         $rows = DB::table('shf_swap_requests as r')
             ->join('emp_employees as e', 'e.id', '=', 'r.requesting_employee_id')
@@ -61,7 +68,7 @@ final class ShiftSwapApprovalController extends Controller
     /** Untuk badge notifikasi sidebar (ComputeNavigationBadgeCounts) — query+filter SAMA seperti index(), hanya count. */
     public function pendingCount(): int
     {
-        if (! ($this->actor->hasRole(Role::AtasanLangsung->value) || $this->actor->hasRole(Role::Auditor->value))) {
+        if (! $this->actor->hasPermission('shift-swap-approval.view')) {
             return 0;
         }
 
@@ -76,19 +83,25 @@ final class ShiftSwapApprovalController extends Controller
 
     public function approve(string $id): RedirectResponse
     {
-        return $this->decide($id, 'approved', 'Pengajuan tukar shift disetujui.');
+        return $this->decide($id, 'approved', 'Pengajuan tukar shift disetujui.', null);
     }
 
-    public function reject(string $id): RedirectResponse
+    public function reject(string $id, Request $request): RedirectResponse
     {
-        return $this->decide($id, 'rejected', 'Pengajuan tukar shift ditolak.');
+        $note = $request->string('catatan')->toString();
+
+        return $this->decide($id, 'rejected', 'Pengajuan tukar shift ditolak.', $note !== '' ? $note : null);
     }
 
-    private function decide(string $id, string $status, string $successMessage): RedirectResponse
+    private function decide(string $id, string $status, string $successMessage, ?string $note): RedirectResponse
     {
         $request = DB::table('shf_swap_requests as r')
             ->join('emp_employees as e', 'e.id', '=', 'r.requesting_employee_id')
-            ->select('r.id', 'r.status', 'r.requesting_employee_id', 'r.counterpart_employee_id', 'e.id as employee_id', 'e.office_id')
+            ->select(
+                'r.id', 'r.request_number', 'r.status', 'r.requesting_employee_id', 'r.counterpart_employee_id', 'r.swap_date',
+                'r.requesting_original_pattern_id', 'r.counterpart_original_pattern_id',
+                'e.id as employee_id', 'e.office_id',
+            )
             ->where('r.id', $id)
             ->first();
 
@@ -110,14 +123,43 @@ final class ShiftSwapApprovalController extends Controller
                 'status' => $status,
                 'approver_id' => $actorEmployeeId,
                 'decided_at' => now(),
+                'decision_note' => $note,
                 'updated_at' => now(),
             ]);
+
+        // Sebelumnya HANYA status yang berubah — persetujuan tidak pernah
+        // benar-benar menukar penugasan shift kedua pegawai (bug ditemukan
+        // lewat audit kode). Hanya berlaku pada 'approved', bukan reject.
+        if ($affected > 0 && $status === 'approved') {
+            $this->applySwap->handle(
+                requestingEmployeeId: $request->requesting_employee_id,
+                counterpartEmployeeId: $request->counterpart_employee_id,
+                swapDate: new DateTimeImmutable($request->swap_date),
+                requestingOriginalPatternId: $request->requesting_original_pattern_id,
+                counterpartOriginalPatternId: $request->counterpart_original_pattern_id,
+                actorId: $actorEmployeeId,
+                now: new DateTimeImmutable,
+            );
+        }
+
+        // Tukar Shift SATU tahap — setiap keputusan sudah final.
+        if ($affected > 0) {
+            $this->notifyRequester($request->requesting_employee_id, $request->request_number, $status === 'approved', $note);
+        }
 
         return redirect()
             ->route('admin.shift-swap-queue')
             ->with($affected > 0 ? 'sukses' : 'gagal', $affected > 0
                 ? $successMessage
                 : 'Pengajuan sudah diputus sebelumnya.');
+    }
+
+    /** Melewati pengiriman bila pegawai tidak (lagi) punya akun login — bukan kondisi yang perlu menggagalkan keputusan. */
+    private function notifyRequester(string $employeeId, string $requestNumber, bool $approved, ?string $reason): void
+    {
+        $user = User::query()->where('employee_id', $employeeId)->first();
+
+        $user?->notify(new RequestDecided($requestNumber, 'tukar shift', $approved, $reason));
     }
 
     private function policy(): AccessPolicy

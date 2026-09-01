@@ -135,7 +135,7 @@ button:active{transform:scale(.98)}
 
 <div class="split">
   <div class="panel-form">
-    <div class="logo anim"><img src="{{ asset('images/logo_ntbs-BSIF94NC.png') }}" alt="Bank NTB Syariah"></div>
+    <div class="logo anim"><img src="{{ asset('images/logo_ntbs-EC94901A.png') }}" alt="Bank NTB Syariah"></div>
     <div class="jd anim">Selamat Datang</div>
     <div class="sb anim">Masuk ke HCIS Bank NTB Syariah dengan NRP dan kata sandi Anda</div>
 
@@ -181,7 +181,7 @@ button:active{transform:scale(.98)}
     <div class="panel-visual-img"></div>
     <div class="visual-konten">
       <div class="merek">
-        <div class="plat"><img src="{{ asset('images/logo_ntbs-BSIF94NC.png') }}" alt="Bank NTB Syariah"></div>
+        <div class="plat"><img src="{{ asset('images/logo_ntbs-EC94901A.png') }}" alt="Bank NTB Syariah"></div>
         <div class="nm">Bank NTB Syariah<small>Human Capital Information System</small></div>
       </div>
     </div>

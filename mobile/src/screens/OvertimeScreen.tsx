@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient, apiErrorMessage } from '../api/client';
 import { ListResponse, OvertimeRequestRow } from '../api/types';
@@ -46,6 +46,23 @@ export function OvertimeScreen() {
   useFocusEffect(useCallback(() => {
     load();
   }, [load]));
+
+  function confirmCancel(item: OvertimeRequestRow) {
+    Alert.alert('Batalkan Pengajuan', `Batalkan pengajuan lembur ${item.spkl_number}?`, [
+      { text: 'Tidak', style: 'cancel' },
+      { text: 'Ya, Batalkan', style: 'destructive', onPress: () => cancelRequest(item.id) },
+    ]);
+  }
+
+  async function cancelRequest(id: string) {
+    try {
+      await apiClient.post(`/lembur/${id}/batal`);
+      showSuccess('Pengajuan lembur berhasil dibatalkan.');
+      load();
+    } catch (error) {
+      showError(apiErrorMessage(error, 'Pengajuan tidak dapat dibatalkan.'));
+    }
+  }
 
   async function handleSubmit() {
     if (!workDate) {
@@ -99,6 +116,14 @@ export function OvertimeScreen() {
                 <Ionicons name="time-outline" size={14} color={colors.textMuted} />
                 <Text style={styles.dateText}>{item.work_date} · {typeLabel}</Text>
               </View>
+              {item.status === 'rejected' && item.decision_note ? (
+                <Text style={styles.decisionNote}>Alasan penolakan: {item.decision_note}</Text>
+              ) : null}
+              {item.status === 'pending' ? (
+                <TouchableOpacity onPress={() => confirmCancel(item)} style={styles.cancelBtn}>
+                  <Text style={styles.cancelBtnText}>Batalkan</Text>
+                </TouchableOpacity>
+              ) : null}
             </Card>
           );
         }}
@@ -129,4 +154,7 @@ const styles = StyleSheet.create({
   dateRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: 2 },
   dateText: { ...type.caption },
   hint: { ...type.tiny, marginBottom: spacing.md, lineHeight: 16 },
+  decisionNote: { fontSize: 12.5, color: colors.danger, marginTop: spacing.xs },
+  cancelBtn: { alignSelf: 'flex-start', marginTop: spacing.sm },
+  cancelBtnText: { fontSize: 12.5, fontWeight: '700', color: colors.danger },
 });

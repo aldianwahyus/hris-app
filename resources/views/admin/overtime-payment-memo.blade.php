@@ -4,98 +4,115 @@
 <meta charset="utf-8">
 <title>Memo Internal {{ $batch->spkl_number }}</title>
 <style>
-  body{font-family:'Helvetica',Arial,sans-serif;font-size:12px;color:#1a1a1a;margin:32px}
-  .kop{position:relative;text-align:center;border-bottom:2px solid #1a1a1a;padding-bottom:10px;margin-bottom:18px}
-  .kop img{position:absolute;top:0;right:0;height:40px}
-  .kop h1{font-size:15px;margin:0 0 2px}
-  .kop p{margin:0;font-size:11px;color:#444}
-  .judul{text-align:center;margin-bottom:4px}
-  .judul h2{font-size:13px;text-decoration:underline;margin:0}
-  .judul p{margin:2px 0 0;font-size:11px}
-  table.data{width:100%;border-collapse:collapse;margin:18px 0}
-  table.data td{padding:4px 6px;vertical-align:top;font-size:11.5px}
-  table.data td.label{width:180px;color:#333}
+  body{font-family:'Helvetica',Arial,sans-serif;font-size:11px;color:#1a1a1a;margin:30px}
+  .kop img{height:34px;float:right}
+  .judul{text-align:center;font-weight:700;font-size:14px;text-decoration:underline;margin-bottom:16px;clear:both;padding-top:6px}
+  table.data{width:100%;border-collapse:collapse;margin-bottom:10px}
+  table.data td{padding:2px 0;font-size:11px;vertical-align:top}
+  table.data td.lbl{width:80px}
   table.data td.sep{width:14px}
-  .isi{margin:16px 0;font-size:11.5px;line-height:1.7;text-align:justify}
-  table.rincian{width:100%;border-collapse:collapse;margin:14px 0}
-  table.rincian th,table.rincian td{border:1px solid #999;padding:6px 8px;font-size:11px}
-  table.rincian th{background:#f0f0f0;text-align:left}
+  .isi{margin:12px 0;font-size:11px;line-height:1.7;text-align:justify}
+  ol.dasar{margin:8px 0 12px 20px;font-size:11px;line-height:1.7}
+  table.rincian{width:100%;border-collapse:collapse;margin:10px 0}
+  table.rincian th,table.rincian td{border:1px solid #1a1a1a;padding:5px 6px;font-size:10px}
+  table.rincian th{background:#f0f0f0;text-align:center}
   table.rincian td.angka{text-align:right}
-  table.rincian tfoot td{font-weight:700;background:#f7f7f7}
-  .ttd{width:100%;margin-top:48px}
-  .ttd table{width:100%}
-  .ttd td{width:50%;text-align:center;font-size:11.5px;vertical-align:top}
-  .ttd .garis{margin-top:56px;border-top:1px solid #1a1a1a;padding-top:4px;display:inline-block;min-width:200px}
-  .catatan{margin-top:24px;font-size:10px;color:#666}
+  table.rincian td.nama{text-align:left}
+  table.rincian tfoot td{font-weight:700;background:#f7f7f7;text-align:center}
+  table.rincian tfoot td.angka{text-align:right}
+  .penutup{margin:14px 0;font-size:11px}
+  .ttd{margin-top:34px}
+  .ttd .garis{display:block;margin-top:56px;border-top:1px solid #1a1a1a;padding-top:3px;min-width:200px}
+  .kaki{margin-top:16px;font-size:8px;color:#777;border-top:1px solid #ccc;padding-top:4px}
 </style>
 </head>
 <body>
+@php
+  $awal = $items->min('work_date');
+  $akhir = $items->max('work_date');
+  $rp = fn (?int $cents) => number_format(($cents ?? 0) / 100, 0, ',', '.');
+  $pertama = $items->first();
+@endphp
+
   <div class="kop">
     <img src="{{ \App\Interfaces\Http\Support\CompanyLogo::dataUri() }}" alt="Bank NTB Syariah">
-    <h1>Bank NTB Syariah</h1>
-    <p>{{ $officeAddress ?? 'Alamat kantor belum diisi — lengkapi di Daftar Kantor' }}</p>
   </div>
 
-  <div class="judul">
-    <h2>MEMO INTERNAL — PENGAJUAN PEMBAYARAN LEMBUR</h2>
-    <p>Nomor: {{ $batch->spkl_number }}</p>
-  </div>
+  <div class="judul">MEMO INTERNAL</div>
 
   <table class="data">
-    <tr><td class="label">Lingkup Pembayaran</td><td class="sep">:</td><td>{{ $batch->payer_scope === 'hc' ? 'Kantor Pusat — Divisi '.$batch->division : $batch->office_name }}</td></tr>
-    <tr><td class="label">Jumlah Pegawai</td><td class="sep">:</td><td>{{ $items->count() }} orang</td></tr>
-    <tr><td class="label">Tanggal Diproses</td><td class="sep">:</td><td>{{ \Carbon\Carbon::parse($batch->created_at)->translatedFormat('l, d F Y') }}</td></tr>
+    <tr><td class="lbl">Kepada Yth</td><td class="sep">:</td><td>-</td></tr>
+    <tr><td class="lbl">Dari</td><td class="sep">:</td><td>-</td></tr>
+    <tr><td class="lbl">Tanggal</td><td class="sep">:</td><td>{{ \Carbon\Carbon::parse($batch->created_at)->translatedFormat('d F Y') }}</td></tr>
+    <tr>
+      <td class="lbl">Perihal</td><td class="sep">:</td>
+      <td>
+        Usul Pembayaran Uang Lembur tanggal
+        {{ $awal ? \Carbon\Carbon::parse($awal)->format('d/m/Y') : '—' }}
+        s/d {{ $akhir ? \Carbon\Carbon::parse($akhir)->format('d/m/Y') : '—' }}
+      </td>
+    </tr>
   </table>
 
+  <div class="isi">Dengan hormat,</div>
   <div class="isi">
-    Dengan ini diajukan pembayaran uang lembur untuk pegawai-pegawai sebagaimana tercantum
-    dalam lampiran, sesuai dengan pengajuan yang telah disetujui pejabat berwenang pada tahap
-    persetujuan sebelumnya. Rincian nominal bruto, potongan pajak, dan nominal bersih yang
-    akan disalurkan ke rekening masing-masing pegawai tercantum pada tabel di bawah.
+    Menunjuk Surat Perintah Kerja Lembur Nomor {{ $pertama->spkl_number ?? $batch->spkl_number }}
+    tanggal {{ $pertama && $pertama->work_date ? \Carbon\Carbon::parse($pertama->work_date)->format('d/m/Y') : '—' }},
+    bersama ini dapat kami sampaikan bahwa :
   </div>
+
+  <ol class="dasar">
+    <li>SK Direksi Nomor : {{ $skDireksi ?? '—' }} tentang uang makan / uang lembur</li>
+    <li>Pelaksana lembur terlampir</li>
+    <li>Sehubungan dengan hal tersebut diatas, kami usulkan diberikan uang lembur masing-masing kepada :</li>
+  </ol>
 
   <table class="rincian">
     <thead>
-      <tr><th>Pegawai</th><th>NRP</th><th style="text-align:right">Bruto</th><th style="text-align:right">Pajak</th><th style="text-align:right">Bersih</th></tr>
+      <tr>
+        <th>No.</th><th>Nm Pegawai</th>
+        <th colspan="2">Lama<br>Hari&nbsp;&nbsp;&nbsp;Jam</th>
+        <th>Uang<br>Lembur</th><th>Total</th><th>PPH {{ rtrim(rtrim(number_format($batch->tax_rate_percent, 2), '0'), '.') }}%</th><th>Diterima</th><th>Keterangan</th>
+      </tr>
     </thead>
     <tbody>
-      @foreach ($items as $i)
+      @foreach ($items as $i => $it)
+        @php
+          $jam = (float) ($it->planned_hours ?? 0);
+          $tarifPerJam = $jam > 0 ? (int) round($it->gross_cents / $jam) : 0;
+        @endphp
         <tr>
-          <td>{{ $i->full_name }}</td>
-          <td>{{ $i->nrp }}</td>
-          <td class="angka">Rp{{ number_format($i->gross_cents / 100, 0, ',', '.') }}</td>
-          <td class="angka">Rp{{ number_format($i->tax_cents / 100, 0, ',', '.') }}</td>
-          <td class="angka">Rp{{ number_format($i->net_cents / 100, 0, ',', '.') }}</td>
+          <td>{{ $i + 1 }}</td>
+          <td class="nama">{{ $it->full_name }}</td>
+          <td>1</td>
+          <td>{{ rtrim(rtrim(number_format($jam, 2), '0'), '.') ?: '0' }}</td>
+          <td class="angka">{{ $rp($tarifPerJam) }}</td>
+          <td class="angka">{{ $rp($it->gross_cents) }}</td>
+          <td class="angka">{{ $rp($it->tax_cents) }}</td>
+          <td class="angka">{{ $rp($it->net_cents) }}</td>
+          <td></td>
         </tr>
       @endforeach
     </tbody>
     <tfoot>
       <tr>
-        <td colspan="2">TOTAL</td>
-        <td class="angka">Rp{{ number_format($batch->total_gross_cents / 100, 0, ',', '.') }}</td>
-        <td class="angka">Rp{{ number_format($batch->total_tax_cents / 100, 0, ',', '.') }}</td>
-        <td class="angka">Rp{{ number_format($batch->total_net_cents / 100, 0, ',', '.') }}</td>
+        <td colspan="5">JUMLAH</td>
+        <td class="angka">{{ $rp($batch->total_gross_cents) }}</td>
+        <td class="angka">{{ $rp($batch->total_tax_cents) }}</td>
+        <td class="angka">{{ $rp($batch->total_net_cents) }}</td>
+        <td></td>
       </tr>
     </tfoot>
   </table>
 
+  <div class="penutup">Demikian usul kami sampaikan, mohon keputusan. Terima kasih</div>
+
   <div class="ttd">
-    <table>
-      <tr>
-        <td>
-          Diajukan oleh,<br><br>
-          <span class="garis">{{ $batch->signatory_name }}</span>
-        </td>
-        <td>
-          Mengetahui/Menyetujui,<br><br>
-          <span class="garis">&nbsp;</span>
-        </td>
-      </tr>
-    </table>
+    <span class="garis">{{ $batch->signatory_name }}</span>
   </div>
 
-  <p class="catatan">
-    Dokumen ini dicetak otomatis oleh sistem HCIS pada {{ \Carbon\Carbon::now()->translatedFormat('d F Y, H:i') }} WITA
+  <p class="kaki">
+    Dicetak otomatis oleh sistem HCIS pada {{ \Carbon\Carbon::now()->translatedFormat('d F Y, H:i') }} WITA
     berdasarkan batch pembayaran {{ $batch->spkl_number }}.
   </p>
 </body>

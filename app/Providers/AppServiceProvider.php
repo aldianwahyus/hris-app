@@ -32,6 +32,8 @@ class AppServiceProvider extends ServiceProvider
         // baik daripada halaman 500.
         View::composer('layouts.app', function ($view) {
             $badgeCounts = [];
+            $unreadNotificationCount = 0;
+            $recentNotifications = collect();
 
             if (Auth::check()) {
                 try {
@@ -39,9 +41,28 @@ class AppServiceProvider extends ServiceProvider
                 } catch (Throwable) {
                     $badgeCounts = [];
                 }
+
+                // Lonceng notifikasi web — relasi Eloquent bawaan Notifiable
+                // yang SAMA dipakai NotificationApiController mobile (lihat
+                // App\Notifications\RequestDecided/ApprovalSlaReminder).
+                // Dibungkus try/catch terpisah dengan alasan SAMA seperti
+                // badge di atas: layout tidak boleh gagal render gara-gara ini.
+                try {
+                    $user = Auth::user();
+
+                    if ($user !== null) {
+                        $unreadNotificationCount = $user->unreadNotifications()->count();
+                        $recentNotifications = $user->notifications()->limit(8)->get();
+                    }
+                } catch (Throwable) {
+                    $unreadNotificationCount = 0;
+                    $recentNotifications = collect();
+                }
             }
 
             $view->with('badgeCounts', $badgeCounts);
+            $view->with('unreadNotificationCount', $unreadNotificationCount);
+            $view->with('recentNotifications', $recentNotifications);
         });
     }
 }

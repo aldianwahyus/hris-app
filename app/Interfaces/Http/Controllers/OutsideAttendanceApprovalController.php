@@ -32,10 +32,12 @@ final class OutsideAttendanceApprovalController extends Controller
 
     public function index(): View
     {
-        $isPimpinanKantor = $this->actor->hasRole(Role::PimpinanKantor->value);
-        $isAuditor = $this->actor->hasRole(Role::Auditor->value);
-
-        abort_unless($isPimpinanKantor || $isAuditor, 403, 'Anda tidak memiliki peran yang berwenang melihat antrean ini.');
+        // Gerbang akses SESUNGGUHNYA sudah middleware
+        // `permission:outside-attendance-approval.view` di routes/web.php (diatur
+        // lewat Peta Peran) — cek di sini cermin permission itu, BUKAN daftar role
+        // hardcode terpisah (lihat catatan sama di
+        // ApprovalQueueController::assertHasAnyRelevantRole()).
+        abort_unless($this->actor->hasPermission('outside-attendance-approval.view'), 403, 'Anda tidak memiliki peran yang berwenang melihat antrean ini.');
 
         $rows = DB::table('att_outside_attendance_requests as r')
             ->join('emp_employees as e', 'e.id', '=', 'r.employee_id')
@@ -55,7 +57,7 @@ final class OutsideAttendanceApprovalController extends Controller
     /** Untuk badge notifikasi sidebar (ComputeNavigationBadgeCounts) — query+filter SAMA seperti index(), hanya count. */
     public function pendingCount(): int
     {
-        if (! ($this->actor->hasRole(Role::PimpinanKantor->value) || $this->actor->hasRole(Role::Auditor->value))) {
+        if (! $this->actor->hasPermission('outside-attendance-approval.view')) {
             return 0;
         }
 

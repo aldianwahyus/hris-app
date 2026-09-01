@@ -6,8 +6,10 @@ namespace Tests\Feature\Sppd;
 
 use App\Core\Domain\Uuid7;
 use App\Models\User;
+use App\Notifications\RequestDecided;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 /**
@@ -118,6 +120,104 @@ final class SppdApprovalScopeTest extends TestCase
 
         $response->assertRedirect(route('admin.sppd-approval-queue'));
         $this->assertSame('pending_pimpinan', DB::table('spd_requests')->where('id', $requestId)->value('status'));
+    }
+
+    /**
+     * Celah ditemukan lewat evaluasi PM/client (2026-08-27) — pola SAMA
+     * PERSIS LeaveApprovalQueueScopeTest.
+     */
+    public function test_penolakan_menyimpan_alasan_dan_mengirim_notifikasi_ke_pemohon(): void
+    {
+        Notification::fake();
+
+        $requestId = $this->insertSppdRequest($this->employeeId('2018.03.0142'), 'pending');
+
+        $response = $this->actingAs($this->userWithNrp('2015.07.0088'))
+            ->post("/persetujuan/sppd/{$requestId}/tolak", ['catatan' => 'Anggaran perjalanan dinas kuartal ini sudah habis.']);
+
+        $response->assertRedirect(route('admin.sppd-approval-queue'));
+
+        $row = DB::table('spd_requests')->where('id', $requestId)->first();
+        $this->assertNotNull($row);
+        $this->assertSame('Anggaran perjalanan dinas kuartal ini sudah habis.', $row->decision_note);
+
+        Notification::assertSentTo(
+            $this->userWithNrp('2018.03.0142'),
+            fn (RequestDecided $n) => $n->approved === false && $n->reason === 'Anggaran perjalanan dinas kuartal ini sudah habis.',
+        );
+    }
+
+    public function test_setuju_tahap_atasan_belum_final_tidak_mengirim_notifikasi(): void
+    {
+        Notification::fake();
+
+        $requestId = $this->insertSppdRequest($this->employeeId('2018.03.0142'), 'pending');
+
+        $this->actingAs($this->userWithNrp('2015.07.0088'))
+            ->post("/persetujuan/sppd/{$requestId}/setujui");
+
+        Notification::assertNothingSent();
+    }
+
+    public function test_setuju_tahap_pimpinan_final_mengirim_notifikasi_ke_pemohon(): void
+    {
+        Notification::fake();
+
+        $requestId = $this->insertSppdRequest(
+            $this->employeeId('2018.03.0142'),
+            'pending_pimpinan',
+            atasanApproverId: (string) Uuid7::generate(),
+        );
+
+        $this->actingAs($this->userWithNrp('2015.07.0088'))
+            ->post("/persetujuan/sppd/{$requestId}/setujui");
+
+        Notification::assertSentTo(
+            $this->userWithNrp('2018.03.0142'),
+            fn (RequestDecided $n) => $n->approved === true,
+        );
+    }
+
+    public function test_batal_saat_pending_berhasil(): void
+    {
+        $requestId = $this->insertSppdRequest($this->employeeId('2018.03.0142'), 'pending');
+
+        $response = $this->actingAs($this->userWithNrp('2018.03.0142'))
+            ->post("/sppd/{$requestId}/batal");
+
+        $response->assertRedirect();
+        $this->assertSame('cancelled', DB::table('spd_requests')->where('id', $requestId)->value('status'));
+    }
+
+    public function test_batal_gagal_setelah_tahap_1_diputus(): void
+    {
+        $requestId = $this->insertSppdRequest(
+            $this->employeeId('2018.03.0142'),
+            'pending_pimpinan',
+            atasanApproverId: (string) Uuid7::generate(),
+        );
+
+        $response = $this->actingAs($this->userWithNrp('2018.03.0142'))
+            ->post("/sppd/{$requestId}/batal");
+
+        $response->assertRedirect();
+        $response->assertSessionHas('gagal');
+        $this->assertSame('pending_pimpinan', DB::table('spd_requests')->where('id', $requestId)->value('status'));
+    }
+
+    public function test_riwayat_hanya_menampilkan_pengajuan_milik_sendiri(): void
+    {
+        $sitiRequestId = $this->insertSppdRequest($this->employeeId('2018.03.0142'), 'pending');
+        $ahmadRequestId = $this->insertSppdRequest($this->employeeId('2015.07.0088'), 'pending');
+
+        $sitiNumber = DB::table('spd_requests')->where('id', $sitiRequestId)->value('request_number');
+        $ahmadNumber = DB::table('spd_requests')->where('id', $ahmadRequestId)->value('request_number');
+
+        $response = $this->actingAs($this->userWithNrp('2018.03.0142'))->get('/sppd/riwayat');
+
+        $response->assertOk();
+        $response->assertSee($sitiNumber);
+        $response->assertDontSee($ahmadNumber);
     }
 
     private function insertSppdRequest(

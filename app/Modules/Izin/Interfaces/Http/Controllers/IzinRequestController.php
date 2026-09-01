@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Izin\Interfaces\Http\Controllers;
 
+use App\Modules\Izin\Application\CancelIzinRequest;
 use App\Modules\Izin\Application\SubmitIzinRequest;
 use App\Modules\Izin\Domain\IzinCategory;
 use App\Modules\Izin\Interfaces\Http\Requests\SubmitIzinRequestForm;
@@ -27,7 +28,34 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 final class IzinRequestController
 {
-    public function __construct(private readonly SubmitIzinRequest $submit) {}
+    public function __construct(
+        private readonly SubmitIzinRequest $submit,
+        private readonly CancelIzinRequest $cancel,
+    ) {}
+
+    public function cancelRequest(Request $request, string $id): RedirectResponse
+    {
+        $user = $request->user();
+
+        abort_if($user === null || $user->employee_id === null, 403, 'Akun ini belum ditautkan ke data pegawai.');
+
+        try {
+            $this->cancel->handle(
+                izinRequestId: $id,
+                employeeId: $user->employee_id,
+                actor: new AuditActor(
+                    actorId: $user->employee_id,
+                    actorRole: implode(',', $user->getRoleNames()->all()),
+                    ipAddress: $request->ip(),
+                    userAgent: $request->userAgent(),
+                ),
+            );
+        } catch (DomainException $e) {
+            return back()->with('gagal', $e->getMessage());
+        }
+
+        return back()->with('sukses', 'Pengajuan izin berhasil dibatalkan.');
+    }
 
     public function create(Request $request): View
     {

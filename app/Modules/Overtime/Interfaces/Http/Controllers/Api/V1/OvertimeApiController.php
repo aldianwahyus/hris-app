@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Overtime\Interfaces\Http\Controllers\Api\V1;
 
+use App\Modules\Overtime\Application\CancelOvertimeRequest;
 use App\Modules\Overtime\Application\SubmitOvertimeRequest;
 use App\Modules\Overtime\Domain\NoOvertimeEvidence;
 use App\Modules\Overtime\Domain\OvertimeType;
@@ -24,7 +25,10 @@ use RuntimeException;
  */
 final class OvertimeApiController
 {
-    public function __construct(private readonly SubmitOvertimeRequest $submit) {}
+    public function __construct(
+        private readonly SubmitOvertimeRequest $submit,
+        private readonly CancelOvertimeRequest $cancel,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -64,5 +68,29 @@ final class OvertimeApiController
         }
 
         return response()->json(['spkl_number' => $spklNumber], 201);
+    }
+
+    public function cancel(Request $request, string $id): JsonResponse
+    {
+        $user = $request->user();
+
+        abort_if($user === null || $user->employee_id === null, 403, 'Akun ini belum ditautkan ke data pegawai.');
+
+        try {
+            $this->cancel->handle(
+                overtimeRequestId: $id,
+                employeeId: $user->employee_id,
+                actor: new AuditActor(
+                    actorId: $user->employee_id,
+                    actorRole: implode(',', $user->getRoleNames()->all()),
+                    ipAddress: $request->ip(),
+                    userAgent: $request->userAgent(),
+                ),
+            );
+        } catch (DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['message' => 'Pengajuan lembur berhasil dibatalkan.']);
     }
 }

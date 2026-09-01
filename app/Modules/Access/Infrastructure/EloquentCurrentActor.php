@@ -54,4 +54,12 @@ final class EloquentCurrentActor implements CurrentActor
 
         return $user?->hasRole($role) ?? false;
     }
+
+    public function hasPermission(string $permission): bool
+    {
+        /** @var User|null $user */
+        $user = Auth::user();
+
+        return $user?->hasPermissionTo($permission) ?? false;
+    }
 }

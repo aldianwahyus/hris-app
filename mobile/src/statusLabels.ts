@@ -9,6 +9,8 @@ export const REQUEST_STATUS: Record<string, { label: string; tone: BadgeTone }> 
   pending_pimpinan: { label: 'Menunggu Pimpinan Kantor', tone: 'warning' },
   approved: { label: 'Disetujui', tone: 'success' },
   rejected: { label: 'Ditolak', tone: 'danger' },
+  cancelled: { label: 'Dibatalkan', tone: 'neutral' },
+  expired: { label: 'Kedaluwarsa', tone: 'danger' },
   disbursed: { label: 'Sudah Dicairkan', tone: 'success' },
 };
 

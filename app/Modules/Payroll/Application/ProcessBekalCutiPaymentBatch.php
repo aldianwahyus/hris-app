@@ -47,6 +47,15 @@ use Illuminate\Support\Facades\DB;
  *    penghasilan gabungan) — gaji kotornya sendiri sudah/akan dipajaki
  *    terpisah lewat payroll bulanan, modul ini tidak menyentuhnya,
  *    tidak boleh memotong pajak dua kali atas komponen yang sama.
+ * 6. GROSS-UP, bukan potong: PPh 21 langkah 5 DITANGGUNG bank sebagai
+ *    beban terpisah (Beban PPh 21 → Penampungan Pajak), BUKAN dipotong
+ *    dari bekal cuti yang diterima pegawai — dibuktikan dari Nota
+ *    Debet/Lampiran resmi Bank NTB Syariah ("Jumlah Diterima" pegawai
+ *    SAMA PERSIS dengan "Bekal Cuti" bruto, pajak dibukukan terpisah
+ *    lewat rekening Penampungan Pajak, tidak mengurangi rekening
+ *    pegawai). net_cents = gross_cents (BUKAN gross-tax) — beda dari
+ *    pola Lembur/SPPD yang memang memotong pajak dari nominal yang
+ *    ditransfer ke pegawai.
  *
  * Tidak ada guard "pejabat pengusul != approver" seperti lembur — baris
  * pay_bekal_cuti_disbursements TIDAK punya kolom approver sama sekali
@@ -142,7 +151,10 @@ final class ProcessBekalCutiPaymentBatch
                 // supaya gaji kotor yang sudah/akan dipajaki lewat payroll
                 // bulanan tidak terpotong pajak dua kali di sini.
                 $tax = $grossBekalCuti->percentage($ratePercent);
-                $net = $grossBekalCuti->subtract($tax);
+                // GROSS-UP (lihat docblock kelas langkah 6): pegawai menerima
+                // UTUH bekal cuti bruto, bank menanggung pajaknya sebagai
+                // beban terpisah — net_cents BUKAN gross-tax.
+                $net = $grossBekalCuti;
 
                 $items[] = [
                     'bekal_cuti_disbursement_id' => $disbursement->id,

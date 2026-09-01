@@ -8,6 +8,7 @@ use App\Interfaces\Http\Controllers\AttendanceDeviceImportController;
 use App\Interfaces\Http\Controllers\AttendanceRecapController;
 use App\Interfaces\Http\Controllers\AuditLogController;
 use App\Interfaces\Http\Controllers\BekalCutiDisbursementController;
+use App\Interfaces\Http\Controllers\BranchDashboardController;
 use App\Interfaces\Http\Controllers\CompetencyController;
 use App\Interfaces\Http\Controllers\DashboardController;
 use App\Interfaces\Http\Controllers\DecisionLetterController;
@@ -23,6 +24,7 @@ use App\Interfaces\Http\Controllers\EmployeeHealthRecordController;
 use App\Interfaces\Http\Controllers\EmployeeImportController;
 use App\Interfaces\Http\Controllers\EmployeeInternalWorkHistoryController;
 use App\Interfaces\Http\Controllers\EmployeeOrganizationController;
+use App\Interfaces\Http\Controllers\EmployeePositionRecordController;
 use App\Interfaces\Http\Controllers\EmployeeTrainingController;
 use App\Interfaces\Http\Controllers\ForumModerationController;
 use App\Interfaces\Http\Controllers\GamificationController;
@@ -43,7 +45,9 @@ use App\Interfaces\Http\Controllers\LmsGamificationController;
 use App\Interfaces\Http\Controllers\LmsLibraryAdminController;
 use App\Interfaces\Http\Controllers\LmsLibraryController;
 use App\Interfaces\Http\Controllers\LmsLiveSessionController;
+use App\Interfaces\Http\Controllers\MobileMenuSettingsController;
 use App\Interfaces\Http\Controllers\NationalHolidayController;
+use App\Interfaces\Http\Controllers\NotificationController;
 use App\Interfaces\Http\Controllers\OfficeController;
 use App\Interfaces\Http\Controllers\OfficeFormasiController;
 use App\Interfaces\Http\Controllers\OfficeGeofenceController;
@@ -60,6 +64,8 @@ use App\Interfaces\Http\Controllers\ShiftPatternController;
 use App\Interfaces\Http\Controllers\ShiftSwapApprovalController;
 use App\Interfaces\Http\Controllers\SppdApprovalController;
 use App\Interfaces\Http\Controllers\SppdDisbursementController;
+use App\Interfaces\Http\Controllers\SppdMemoController;
+use App\Interfaces\Http\Controllers\SppdPaymentBatchController;
 use App\Interfaces\Http\Controllers\SppdTariffAdminController;
 use App\Interfaces\Http\Controllers\SuccessionPlanController;
 use App\Interfaces\Http\Controllers\SystemAdminEmployeeController;
@@ -118,6 +124,11 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
     // terlepas dari peran apa pun yang dipegangnya.
     Route::get('/beranda', DashboardController::class)->name('ess.dashboard');
 
+    // Lonceng notifikasi — lingkup SELF murni, sama seperti beranda di
+    // atas, cermin NotificationApiController mobile.
+    Route::get('/notifikasi', [NotificationController::class, 'index'])->name('notifikasi.index');
+    Route::post('/notifikasi/{id}/baca', [NotificationController::class, 'markAsRead'])->name('notifikasi.baca');
+
     // "CV Saya" — data organisasi HANYA-BACA, data pribadi
     // (SelfEditableEmployeeField) diubah LANGSUNG tanpa persetujuan
     // (beda dari data organisasi lewat maker-checker hr_admin/SYSADMIN).
@@ -130,6 +141,15 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
     Route::prefix('cv-saya')->name('ess.cv.')->group(function () {
         Route::get('/unduh', [EmployeeCvController::class, 'pdf'])->name('pdf');
         Route::get('/sk/{id}/unduh', [EmployeeCvController::class, 'downloadSk'])->name('sk.download');
+
+        // Foto profil — rute TERPISAH dari ess.cv.update (form data
+        // pribadi teks) karena ini unggah berkas, bukan field teks.
+        // photo() menampilkan inline (BEDA dari pdf()/downloadSk() yang
+        // selalu memaksa unduh) supaya bisa dipakai langsung sebagai
+        // src <img>.
+        Route::get('/foto', [EmployeeCvController::class, 'photo'])->name('photo');
+        Route::post('/foto', [EmployeeCvController::class, 'updatePhoto'])->name('photo.update');
+        Route::delete('/foto', [EmployeeCvController::class, 'removePhoto'])->name('photo.destroy');
 
         Route::post('/pelatihan', [EmployeeTrainingController::class, 'store'])->name('trainings.store');
         Route::delete('/pelatihan/{id}', [EmployeeTrainingController::class, 'destroy'])->name('trainings.destroy');
@@ -149,11 +169,19 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
     Route::prefix('cuti')->name('leave.')->group(function () {
         Route::get('/ajukan', [LeaveRequestController::class, 'create'])->name('create');
         Route::post('/ajukan', [LeaveRequestController::class, 'store'])->name('store');
+        Route::get('/riwayat', [LeaveRequestController::class, 'history'])->name('history');
+        // Batal HANYA saat status='pending' (sebelum tahap 1 diputus) —
+        // ditegakkan di CancelLeaveRequest, bukan di sini.
+        Route::post('/{id}/batal', [LeaveRequestController::class, 'cancelRequest'])->name('cancel');
     });
 
     Route::prefix('lembur')->name('overtime.')->group(function () {
         Route::get('/ajukan', [OvertimeRequestController::class, 'create'])->name('create');
         Route::post('/ajukan', [OvertimeRequestController::class, 'store'])->name('store');
+        Route::get('/riwayat', [OvertimeRequestController::class, 'history'])->name('history');
+        // Batal HANYA saat status='pending' (sebelum tahap 1 diputus) —
+        // ditegakkan di CancelOvertimeRequest, bukan di sini.
+        Route::post('/{id}/batal', [OvertimeRequestController::class, 'cancelRequest'])->name('cancel');
         // Kewenangan diperiksa di dalam controller (pemohon/penyetuju/
         // hr_admin kantor sendiri/hr_approver/auditor bank-wide) —
         // bukan lewat middleware role tunggal, karena SPKL berpindah
@@ -184,6 +212,10 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
     Route::prefix('sppd')->name('sppd.')->group(function () {
         Route::get('/ajukan', [SppdRequestController::class, 'create'])->name('create');
         Route::post('/ajukan', [SppdRequestController::class, 'store'])->name('store');
+        Route::get('/riwayat', [SppdRequestController::class, 'history'])->name('history');
+        // Batal HANYA saat status='pending' (sebelum tahap 1 diputus) —
+        // ditegakkan di CancelSppdRequest, bukan di sini.
+        Route::post('/{id}/batal', [SppdRequestController::class, 'cancelRequest'])->name('cancel');
     });
 
     // Tukar Shift — selalu atas nama pegawai yang login (pemohon).
@@ -192,6 +224,10 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
     Route::prefix('tukar-shift')->name('shift.')->group(function () {
         Route::get('/ajukan', [ShiftSwapRequestController::class, 'create'])->name('create');
         Route::post('/ajukan', [ShiftSwapRequestController::class, 'store'])->name('store');
+        Route::get('/riwayat', [ShiftSwapRequestController::class, 'history'])->name('history');
+        // Batal HANYA saat status='pending' (Tukar Shift satu tahap
+        // saja) — ditegakkan di CancelShiftSwapRequest, bukan di sini.
+        Route::post('/{id}/batal', [ShiftSwapRequestController::class, 'cancelRequest'])->name('cancel');
     });
 
     // Izin Tidak Masuk Bekerja — TERPISAH dari Cuti (tidak menyentuh
@@ -201,6 +237,9 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
         Route::get('/ajukan', [IzinRequestController::class, 'create'])->name('create');
         Route::post('/ajukan', [IzinRequestController::class, 'store'])->name('store');
         Route::get('/{id}/lampiran', [IzinRequestController::class, 'downloadAttachment'])->name('attachment');
+        // Batal HANYA saat status='pending' (Izin satu tahap saja) —
+        // ditegakkan di CancelIzinRequest, bukan di sini.
+        Route::post('/{id}/batal', [IzinRequestController::class, 'cancelRequest'])->name('cancel');
     });
 
     // Pelatihan (LMS) — pegawai jelajah jadwal terbuka & mendaftar
@@ -211,6 +250,9 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
         Route::post('/daftar', [LmsEnrollmentController::class, 'store'])->name('store');
         Route::get('/saya', [LmsEnrollmentController::class, 'mine'])->name('mine');
         Route::get('/sertifikat/{id}', [LmsEnrollmentController::class, 'certificate'])->name('certificate');
+        // Batal HANYA saat status='pending' (satu tahap saja) —
+        // ditegakkan di CancelEnrollment, bukan di sini.
+        Route::post('/{id}/batal', [LmsEnrollmentController::class, 'cancelEnrollment'])->name('cancel');
 
         // Digital Library (BRD §5.7) — semua pegawai boleh menjelajah,
         // pola sama rute di atas (tanpa middleware permission).
@@ -295,6 +337,25 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
             Route::get('/{id}/cetak/memo', [OvertimeDisbursementController::class, 'printMemo'])->name('print-memo');
             Route::get('/{id}/cetak/nota-debet', [OvertimeDisbursementController::class, 'printNotaDebet'])->name('print-nota-debet');
             Route::get('/{id}/cetak/jurnal-slip', [OvertimeDisbursementController::class, 'printJurnalSlip'])->name('print-jurnal-slip');
+            Route::get('/{id}/cetak/lampiran-penerima', [OvertimeDisbursementController::class, 'printLampiranPenerima'])->name('print-lampiran-penerima');
+        });
+
+        // Pembayaran SPPD Massal (Admin HC) — batch di-scope PER GRUP MEMO
+        // (bukan per divisi seperti Lembur, lihat ProcessSppdPaymentBatch).
+        // Cabang dibayar Admin Cabang lewat rute terpisah di bawah (prefix
+        // pegawai/), lihat SppdPaymentBatchController.
+        Route::prefix('sppd-massal-pembayaran')->middleware('permission:sppd-payment-batch.hc')->name('sppd-payment.')->group(function () {
+            Route::get('/', [SppdPaymentBatchController::class, 'indexForHc'])->name('groups');
+            Route::get('/{memoGroupId}', [SppdPaymentBatchController::class, 'showMemoQueue'])->name('queue');
+            Route::post('/{memoGroupId}/bayar', [SppdPaymentBatchController::class, 'processBatchForHc'])->name('process');
+        });
+
+        // Detail batch + cetak — diakses HC MAUPUN Admin Cabang, pembatasan
+        // halus ditegakkan di controller (guardBatchAccess()), bukan di sini.
+        Route::prefix('sppd-massal-pembayaran/batch')->name('sppd-payment-batch.')->middleware('permission:sppd-payment-batch.hc|sppd-payment-batch.branch')->group(function () {
+            Route::get('/{id}', [SppdPaymentBatchController::class, 'showBatch'])->name('show');
+            Route::get('/{id}/cetak/nota-debet', [SppdPaymentBatchController::class, 'printNotaDebet'])->name('print-nota-debet');
+            Route::get('/{id}/cetak/jurnal-slip', [SppdPaymentBatchController::class, 'printJurnalSlip'])->name('print-jurnal-slip');
         });
 
         // Cuti SEKARANG 2 TAHAP (pola sama Lembur, lihat
@@ -328,6 +389,7 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
             Route::get('/{id}', [BekalCutiDisbursementController::class, 'showBatch'])->name('show');
             Route::get('/{id}/cetak/memo', [BekalCutiDisbursementController::class, 'printMemo'])->name('print-memo');
             Route::get('/{id}/cetak/nota-debet', [BekalCutiDisbursementController::class, 'printNotaDebet'])->name('print-nota-debet');
+            Route::get('/{id}/cetak/lampiran-penerima', [BekalCutiDisbursementController::class, 'printLampiranPenerima'])->name('print-lampiran-penerima');
         });
 
         // Payroll — checker BANK_WIDE (Pejabat SDM), bukan Direktur
@@ -535,6 +597,23 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
             });
         });
 
+    // SPPD Massal — input berbasis memo divisi (banyak pegawai sekaligus,
+    // langsung disetujui), TERPISAH SEPENUHNYA dari jalur SPPD mandiri
+    // (sppd.*/sppd-approval-queue/sppd-disbursement-queue di atas, TIDAK
+    // disentuh). Lingkup bank-wide/kantor sendiri ditegakkan di
+    // SppdMemoController (pola sama sk.*), bukan di middleware ini.
+    Route::prefix('sppd-massal')
+        ->middleware('permission:sppd-memo.manage')
+        ->name('sppd-memo.')
+        ->group(function () {
+            Route::get('/', [SppdMemoController::class, 'index'])->name('index');
+            Route::get('/buat', [SppdMemoController::class, 'create'])->name('create');
+            Route::post('/', [SppdMemoController::class, 'store'])->name('store');
+            Route::get('/{id}', [SppdMemoController::class, 'show'])->name('show');
+            Route::get('/{id}/cetak/surat-jalan', [SppdMemoController::class, 'printSuratJalan'])->name('print-surat-jalan');
+            Route::get('/{id}/cetak/rincian-lumpsum/{requestId}', [SppdMemoController::class, 'printRincianLumpsum'])->name('print-rincian-lumpsum');
+        });
+
     // Katalog Pelatihan (LMS) — HC (hr_admin/hr_approver/system_admin),
     // BANK_WIDE (bukan office-scoped seperti Data Pegawai — katalog
     // pelatihan berlaku bank-wide, bukan per kantor).
@@ -646,6 +725,10 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
             Route::get('/evaluasi-pre-post/ekspor', [TrainingEvaluationController::class, 'exportPrePostReport'])->name('evaluations.pre-post-report.export');
         });
 
+    Route::get('/pegawai/dasbor', [BranchDashboardController::class, 'index'])
+        ->middleware('permission:branch-dashboard.view')
+        ->name('hr.dashboard');
+
     Route::get('/pegawai/absensi', [AttendanceRecapController::class, 'index'])
         ->middleware('permission:attendance-recap.view')
         ->name('hr.attendance-recap');
@@ -712,6 +795,14 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
         ->middleware('permission:sppd-disbursement.branch')
         ->name('hr.sppd-disbursement.disburse');
 
+    // Pembayaran SPPD Massal (Admin Cabang) — HANYA kantornya sendiri.
+    // Bank-wide dibayar Admin HC lewat rute admin.sppd-payment.groups.
+    Route::prefix('pegawai/sppd-massal-pembayaran')->middleware('permission:sppd-payment-batch.branch')->name('hr.sppd-payment.')->group(function () {
+        Route::get('/', [SppdPaymentBatchController::class, 'indexForBranch'])->name('groups');
+        Route::get('/{memoGroupId}', [SppdPaymentBatchController::class, 'showMemoQueue'])->name('queue');
+        Route::post('/{memoGroupId}/bayar', [SppdPaymentBatchController::class, 'processBatchForBranch'])->name('process');
+    });
+
     // Lingkup BANK_WIDE, hanya-baca, independen (§6.3).
     Route::get('/log-audit', [AuditLogController::class, 'index'])
         ->middleware('permission:audit-log.view')
@@ -720,10 +811,16 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
         ->middleware('permission:audit-log.view')
         ->name('audit.index.export');
 
-    // Dashboard dasar (TOR Fase I) — lingkup BANK_WIDE, hr_approver saja.
+    // Dashboard dasar (TOR Fase I) — lingkup BANK_WIDE, hr_approver + system_admin.
     Route::get('/dasbor-hc', [HcDashboardController::class, 'index'])
         ->middleware('permission:hc-dashboard.view')
         ->name('hc.dashboard');
+
+    // Record Pegawai — laporan rincian posisi terakhir per bulan, BANK_WIDE,
+    // TANPA form input (murni dari SK Mutasi/Promosi yang disetujui).
+    Route::get('/record-pegawai', [EmployeePositionRecordController::class, 'index'])
+        ->middleware('permission:employee-position-record.view')
+        ->name('admin.employee-position-record');
 
     // Bagan struktur organisasi PER kantor/divisi, hanya-baca — SYSADMIN
     // & Admin HC. index() = pemilih unit, show() = bagan visual,
@@ -841,5 +938,10 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
         Route::get('/akun-jurnal', [JournalAccountController::class, 'index'])->name('journal-accounts.index');
         Route::post('/akun-jurnal', [JournalAccountController::class, 'store'])->name('journal-accounts.store');
         Route::post('/akun-jurnal/{id}', [JournalAccountController::class, 'update'])->name('journal-accounts.update');
+
+        // Kontrol menu Aplikasi Mobile — satu saklar per menu, BANK-WIDE
+        // (lihat MobileMenuSettingsController).
+        Route::get('/menu-mobile', [MobileMenuSettingsController::class, 'index'])->name('mobile-menu.index');
+        Route::post('/menu-mobile', [MobileMenuSettingsController::class, 'update'])->name('mobile-menu.update');
     });
 });

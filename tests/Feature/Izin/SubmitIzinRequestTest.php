@@ -153,11 +153,27 @@ final class SubmitIzinRequestTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Tanggal mulai izin wajib hari ini');
 
+        // Bug ditemukan lewat evaluasi PM/client (2026-09-01): tanggal
+        // literal tetap ('2026-09-01') berhenti "bukan hari ini" begitu
+        // tanggal sungguhan mencapainya. Perbaikan PERTAMA (memakai
+        // 'tomorrow' pada zona waktu default PHP/UTC) TERNYATA masih
+        // rapuh — office_timezone pegawai ini (Asia/Makassar, UTC+8)
+        // sudah lebih dulu masuk hari berikutnya daripada UTC pada jam
+        // tertentu, sehingga "besok" versi UTC bisa kebetulan SAMA
+        // dengan "hari ini" versi kantor. Dihitung relatif TERHADAP zona
+        // waktu kantor itu sendiri (pola sama test di bawah ini) supaya
+        // benar-benar dijamin beda, bukan cuma "biasanya beda".
+        $officeTimezone = DB::table('emp_employees as e')
+            ->join('md_offices as o', 'o.id', '=', 'e.office_id')
+            ->where('e.id', $employeeId)
+            ->value('o.timezone') ?? 'Asia/Makassar';
+        $besok = (new DateTimeImmutable('today', new DateTimeZone($officeTimezone)))->modify('+1 day');
+
         $this->submit()->handle(
             employeeId: $employeeId,
             category: IzinCategory::Lainnya,
-            startDate: new DateTimeImmutable('2026-09-01'), // bukan hari ini
-            endDate: new DateTimeImmutable('2026-09-01'),
+            startDate: $besok, // bukan hari ini
+            endDate: $besok,
             reason: 'Uji back date',
             attachmentPath: null,
             attachmentOriginalName: null,

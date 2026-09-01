@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace App\Interfaces\Http\Controllers;
 
+use App\Models\User;
 use App\Modules\Access\Contracts\CurrentActor;
 use App\Modules\Access\Domain\AccessPolicy;
 use App\Modules\Access\Domain\OrganizationalScope;
 use App\Modules\Access\Domain\Role;
 use App\Modules\Employee\Contracts\EmployeeRepository;
+use App\Notifications\RequestDecided;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -32,10 +35,11 @@ final class IzinApprovalController extends Controller
 
     public function index(): View
     {
-        $isAtasanLangsung = $this->actor->hasRole(Role::AtasanLangsung->value);
-        $isAuditor = $this->actor->hasRole(Role::Auditor->value);
-
-        abort_unless($isAtasanLangsung || $isAuditor, 403, 'Anda tidak memiliki peran yang berwenang melihat antrean ini.');
+        // Gerbang akses SESUNGGUHNYA sudah middleware `permission:izin-approval.view`
+        // di routes/web.php (diatur lewat Peta Peran) — cek di sini cermin permission
+        // itu, BUKAN daftar role hardcode terpisah (lihat catatan sama di
+        // ApprovalQueueController::assertHasAnyRelevantRole()).
+        abort_unless($this->actor->hasPermission('izin-approval.view'), 403, 'Anda tidak memiliki peran yang berwenang melihat antrean ini.');
 
         $rows = $this->baseQuery()
             ->where('r.status', 'pending')
@@ -50,7 +54,7 @@ final class IzinApprovalController extends Controller
     /** Untuk badge notifikasi sidebar (ComputeNavigationBadgeCounts) — query+filter SAMA seperti index(), hanya count. */
     public function pendingCount(): int
     {
-        if (! ($this->actor->hasRole(Role::AtasanLangsung->value) || $this->actor->hasRole(Role::Auditor->value))) {
+        if (! $this->actor->hasPermission('izin-approval.view')) {
             return 0;
         }
 
@@ -65,12 +69,14 @@ final class IzinApprovalController extends Controller
 
     public function approve(string $id): RedirectResponse
     {
-        return $this->decide($id, 'approved', 'Pengajuan izin disetujui.');
+        return $this->decide($id, 'approved', 'Pengajuan izin disetujui.', null);
     }
 
-    public function reject(string $id): RedirectResponse
+    public function reject(string $id, Request $request): RedirectResponse
     {
-        return $this->decide($id, 'rejected', 'Pengajuan izin ditolak.');
+        $note = $request->string('catatan')->toString();
+
+        return $this->decide($id, 'rejected', 'Pengajuan izin ditolak.', $note !== '' ? $note : null);
     }
 
     public function downloadAttachment(string $id): StreamedResponse
@@ -84,11 +90,11 @@ final class IzinApprovalController extends Controller
         return Storage::disk('s3')->download($row->attachment_path, $row->attachment_original_name);
     }
 
-    private function decide(string $id, string $status, string $successMessage): RedirectResponse
+    private function decide(string $id, string $status, string $successMessage, ?string $note): RedirectResponse
     {
         $request = DB::table('izin_requests as r')
             ->join('emp_employees as e', 'e.id', '=', 'r.employee_id')
-            ->select('r.id', 'r.status', 'r.employee_id', 'e.office_id')
+            ->select('r.id', 'r.request_number', 'r.status', 'r.employee_id', 'e.office_id')
             ->where('r.id', $id)
             ->first();
 
@@ -109,14 +115,30 @@ final class IzinApprovalController extends Controller
                 'status' => $status,
                 'approver_id' => $actorEmployeeId,
                 'decided_at' => now(),
+                'decision_note' => $note,
                 'updated_at' => now(),
             ]);
+
+        // Izin SATU tahap saja — setiap keputusan sudah final, jadi
+        // notifikasi selalu dikirim (tidak ada tahap transisi seperti
+        // Cuti/Lembur).
+        if ($affected > 0) {
+            $this->notifyRequester($request->employee_id, $request->request_number, $status === 'approved', $note);
+        }
 
         return redirect()
             ->route('admin.izin-queue')
             ->with($affected > 0 ? 'sukses' : 'gagal', $affected > 0
                 ? $successMessage
                 : 'Pengajuan sudah diputus sebelumnya.');
+    }
+
+    /** Melewati pengiriman bila pegawai tidak (lagi) punya akun login — bukan kondisi yang perlu menggagalkan keputusan. */
+    private function notifyRequester(string $employeeId, string $requestNumber, bool $approved, ?string $reason): void
+    {
+        $user = User::query()->where('employee_id', $employeeId)->first();
+
+        $user?->notify(new RequestDecided($requestNumber, 'izin', $approved, $reason));
     }
 
     private function baseQuery(): Builder

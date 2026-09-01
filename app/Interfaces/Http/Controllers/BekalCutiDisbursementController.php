@@ -196,6 +196,16 @@ final class BekalCutiDisbursementController extends Controller
             ->stream("Nota-Debet-Bekal-Cuti-{$slug}.pdf");
     }
 
+    public function printLampiranPenerima(string $id): Response
+    {
+        [$batch, $items, $slug, $officeAddress] = $this->batchWithItemsForPrint($id);
+
+        // Landscape: 11 kolom (NO s.d. No. Simpeda) tidak muat di potret A4.
+        return Pdf::loadView('admin.bekal-cuti-payment-lampiran-penerima', compact('batch', 'items', 'officeAddress'))
+            ->setPaper('a4', 'landscape')
+            ->stream("Lampiran-Penerima-Bekal-Cuti-{$slug}.pdf");
+    }
+
     /** @return array{0: BekalCutiBatchRow, 1: Collection<int, \stdClass>, 2: string, 3: ?string} */
     private function batchWithItemsForPrint(string $id): array
     {
@@ -228,8 +238,10 @@ final class BekalCutiDisbursementController extends Controller
     {
         return DB::table('bkl_payment_batch_items as i')
             ->join('emp_employees as e', 'e.id', '=', 'i.employee_id')
+            ->join('md_positions as p', 'p.id', '=', 'e.position_id')
+            ->join('pay_bekal_cuti_disbursements as d', 'd.id', '=', 'i.bekal_cuti_disbursement_id')
             ->where('i.batch_id', $batchId)
-            ->select('i.*', 'e.full_name', 'e.nrp')
+            ->select('i.*', 'e.full_name', 'e.nrp', 'e.division', 'p.name as position_name', 'd.year')
             ->orderBy('e.full_name')
             ->get();
     }

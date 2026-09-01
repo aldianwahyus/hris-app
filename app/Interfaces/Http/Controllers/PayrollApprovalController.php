@@ -184,6 +184,18 @@ final class PayrollApprovalController extends Controller
             $pesan .= ' Dilewati (sudah ada draf periode ini): '.implode(', ', $result->skippedAlreadyExistsOfficeNames).'.';
         }
 
+        // Pegawai tanpa skala imbalan kerja yang valid TIDAK LAGI
+        // menggagalkan seluruh kantornya (lihat RunPayrollDraft) — HC
+        // wajib diberi tahu SIAPA persis yang terlewat dan KENAPA,
+        // bukan pesan generik yang memaksa menebak.
+        if ($result->failedEmployees !== []) {
+            $rincian = array_map(
+                fn (array $f) => "{$f['name']} ({$f['office']}) — {$f['reason']}",
+                $result->failedEmployees,
+            );
+            $pesan .= ' '.count($result->failedEmployees).' pegawai gagal dibuatkan slip: '.implode('; ', $rincian).'.';
+        }
+
         return redirect()->route('admin.payroll-approval-queue')->with('sukses', $pesan);
     }
 

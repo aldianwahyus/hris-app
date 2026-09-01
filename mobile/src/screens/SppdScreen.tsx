@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient, apiErrorMessage } from '../api/client';
 import { ListResponse, SppdRequestRow } from '../api/types';
@@ -72,6 +72,23 @@ export function SppdScreen() {
     }
   }
 
+  function confirmCancel(item: SppdRequestRow) {
+    Alert.alert('Batalkan Pengajuan', `Batalkan pengajuan SPPD ${item.request_number}?`, [
+      { text: 'Tidak', style: 'cancel' },
+      { text: 'Ya, Batalkan', style: 'destructive', onPress: () => cancelRequest(item.id) },
+    ]);
+  }
+
+  async function cancelRequest(id: string) {
+    try {
+      await apiClient.post(`/sppd/${id}/batal`);
+      showSuccess('Pengajuan SPPD berhasil dibatalkan.');
+      load();
+    } catch (error) {
+      showError(apiErrorMessage(error, 'Pengajuan tidak dapat dibatalkan.'));
+    }
+  }
+
   async function handleSubmit() {
     if (!destination || !purpose || !startDate || !endDate) {
       showError('Tujuan, keperluan, dan tanggal wajib diisi.');
@@ -139,6 +156,14 @@ export function SppdScreen() {
                 <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
                 <Text style={styles.dateText}>{item.start_date} — {item.end_date}</Text>
               </View>
+              {item.status === 'rejected' && item.decision_note ? (
+                <Text style={styles.decisionNote}>Alasan penolakan: {item.decision_note}</Text>
+              ) : null}
+              {item.status === 'pending' ? (
+                <TouchableOpacity onPress={() => confirmCancel(item)} style={styles.cancelBtn}>
+                  <Text style={styles.cancelBtnText}>Batalkan</Text>
+                </TouchableOpacity>
+              ) : null}
             </Card>
           );
         }}
@@ -181,4 +206,7 @@ const styles = StyleSheet.create({
   number: { ...type.body, fontWeight: '700' },
   dateRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: 2 },
   dateText: { ...type.caption },
+  decisionNote: { fontSize: 12.5, color: colors.danger, marginTop: spacing.xs },
+  cancelBtn: { alignSelf: 'flex-start', marginTop: spacing.sm },
+  cancelBtnText: { fontSize: 12.5, fontWeight: '700', color: colors.danger },
 });

@@ -124,7 +124,7 @@ tbody tr:hover{background:#FAFCFB}
                   @csrf
                   <button class="mini utama" type="submit">Setujui</button>
                 </form>
-                <form method="POST" action="{{ route('admin.reject', $r->id) }}">
+                <form method="POST" action="{{ route('admin.reject', $r->id) }}" onsubmit="mintaAlasanTolak(this, event); return false;">
                   @csrf
                   <button class="mini" type="submit">Tolak</button>
                 </form>

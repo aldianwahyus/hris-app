@@ -9,6 +9,7 @@ import { apiClient } from '../api/client';
 import { NotificationListResponse } from '../api/types';
 import { Card } from '../components/Card';
 import { useAuth } from '../context/AuthContext';
+import { MobileMenuKey, useMobileMenu } from '../context/MobileMenuContext';
 import { MainStackParamList, MainTabParamList } from '../navigation/types';
 import { colors, radius, spacing, type } from '../theme';
 
@@ -17,23 +18,27 @@ type QuickAction = {
   label: string;
   tab?: keyof MainTabParamList;
   stack?: keyof MainStackParamList;
+  // undefined = selalu tampil (mis. "Lainnya", bukan menu fitur yang bisa dimatikan admin).
+  menuKey?: MobileMenuKey;
 };
 
 const QUICK_ACTIONS: QuickAction[] = [
-  { icon: 'finger-print', label: 'Absensi', tab: 'Absensi' },
-  { icon: 'calendar', label: 'Cuti', tab: 'Cuti' },
-  { icon: 'time', label: 'Lembur', tab: 'Lembur' },
-  { icon: 'airplane', label: 'SPPD', stack: 'Sppd' },
-  { icon: 'document-text', label: 'Izin', stack: 'Izin' },
-  { icon: 'wallet', label: 'Slip Gaji', stack: 'SlipGaji' },
+  { icon: 'finger-print', label: 'Absensi', tab: 'Absensi', menuKey: 'absensi' },
+  { icon: 'calendar', label: 'Cuti', tab: 'Cuti', menuKey: 'cuti' },
+  { icon: 'time', label: 'Lembur', tab: 'Lembur', menuKey: 'lembur' },
+  { icon: 'airplane', label: 'SPPD', stack: 'Sppd', menuKey: 'sppd' },
+  { icon: 'document-text', label: 'Izin', stack: 'Izin', menuKey: 'izin' },
+  { icon: 'wallet', label: 'Slip Gaji', stack: 'SlipGaji', menuKey: 'slip_gaji' },
   { icon: 'grid', label: 'Lainnya', tab: 'Lainnya' },
 ];
 
 export function HomeScreen() {
   const { user } = useAuth();
+  const { isEnabled } = useMobileMenu();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<MainTabParamList & MainStackParamList>>();
   const [unreadCount, setUnreadCount] = useState(0);
+  const quickActions = QUICK_ACTIONS.filter((action) => !action.menuKey || isEnabled(action.menuKey));
 
   useFocusEffect(
     useCallback(() => {
@@ -57,14 +62,16 @@ export function HomeScreen() {
             <Text style={styles.greeting}>Halo, {firstName} 👋</Text>
             <Text style={styles.greetingSub}>Semoga harimu produktif</Text>
           </View>
-          <TouchableOpacity style={styles.bell} onPress={() => navigation.navigate('Notifikasi')} activeOpacity={0.7}>
-            <Ionicons name="notifications-outline" size={20} color="#fff" />
-            {unreadCount > 0 && (
-              <View style={styles.bellBadge}>
-                <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          {isEnabled('notifikasi') && (
+            <TouchableOpacity style={styles.bell} onPress={() => navigation.navigate('Notifikasi')} activeOpacity={0.7}>
+              <Ionicons name="notifications-outline" size={20} color="#fff" />
+              {unreadCount > 0 && (
+                <View style={styles.bellBadge}>
+                  <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </LinearGradient>
 
@@ -72,7 +79,7 @@ export function HomeScreen() {
         <Card style={styles.quickCard}>
           <Text style={styles.sectionTitle}>Menu Cepat</Text>
           <View style={styles.grid}>
-            {QUICK_ACTIONS.map((action) => (
+            {quickActions.map((action) => (
               <TouchableOpacity
                 key={action.label}
                 style={styles.gridItem}
