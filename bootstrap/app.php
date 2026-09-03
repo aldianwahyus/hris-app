@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\CheckExpiringContracts;
 use App\Console\Commands\ProcessSlaReminders;
 use App\Console\Commands\SyncAttendanceDevice;
 use App\Interfaces\Http\Middleware\PreventBackHistoryCache;
@@ -72,6 +73,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // nyata tanpa membebani mesin dengan permintaan terus-menerus.
         $schedule->command(SyncAttendanceDevice::class)
             ->everyFifteenMinutes()
+            ->withoutOverlapping()
+            ->onOneServer();
+
+        // Manajemen Kontrak — pengingat kontrak kontrak/outsource akan
+        // berakhir (evaluasi PM/client 2026-09-02).
+        $schedule->command(CheckExpiringContracts::class)
+            ->dailyAt('07:15')
             ->withoutOverlapping()
             ->onOneServer();
     })

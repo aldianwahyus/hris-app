@@ -100,7 +100,7 @@ tbody input,tbody select{padding:5px 7px;border:1px solid var(--garis);border-ra
       @forelse ($offices as $o)
         @php $formId = 'kantor-'.$o->id; @endphp
         <tr>
-          <td class="angka">{{ $o->code }}</td>
+          <td class="angka"><input form="{{ $formId }}" type="text" name="code" value="{{ $o->code }}" required maxlength="20" style="width:100px"></td>
           <td><input form="{{ $formId }}" type="text" name="name" value="{{ $o->name }}" required maxlength="150"></td>
           <td style="min-width:220px"><input form="{{ $formId }}" type="text" name="address" value="{{ $o->address }}" maxlength="500"></td>
           <td>

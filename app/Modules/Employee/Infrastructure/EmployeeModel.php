@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string $office_id
  * @property string $position_id
  * @property string $employment_status
+ * @property ?string $separated_at
  */
 final class EmployeeModel extends Model
 {

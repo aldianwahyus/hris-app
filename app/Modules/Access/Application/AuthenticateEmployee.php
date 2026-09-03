@@ -51,6 +51,17 @@ final class AuthenticateEmployee
             return null;
         }
 
+        // Offboarding — modul baru (evaluasi PM/client 2026-09-02):
+        // pegawai yang sudah keluar (separated_at terisi) tidak boleh
+        // lagi login. Pesan galat TETAP seragam dengan kredensial salah
+        // (bukan pesan tersendiri) — mengikuti pola anti-enumerasi akun
+        // yang SUDAH ditegakkan di LoginController: membedakan pesan di
+        // sini akan membuka kanal baru untuk mengetahui status
+        // kepegawaian seseorang dari layar masuk.
+        if ($employee->isSeparated()) {
+            return null;
+        }
+
         return $user;
     }
 }

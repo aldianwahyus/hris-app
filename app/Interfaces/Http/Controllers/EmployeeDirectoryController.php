@@ -105,6 +105,7 @@ final class EmployeeDirectoryController extends Controller
         $internalWorkHistories = DB::table('emp_internal_work_histories')->where('employee_id', $id)->orderByDesc('start_date')->get();
         $externalWorkHistories = DB::table('emp_external_work_histories')->where('employee_id', $id)->orderByDesc('start_date')->get();
         $healthRecords = DB::table('emp_health_records')->where('employee_id', $id)->orderByDesc('record_date')->get();
+        $contracts = DB::table('emp_contracts')->where('employee_id', $id)->orderByDesc('start_date')->get();
 
         // Riwayat LMS — read-only, bagian dari integrasi modul Pelatihan
         // ke Data Kepegawaian (lihat RecordCourseCompletion yang juga
@@ -131,6 +132,7 @@ final class EmployeeDirectoryController extends Controller
             'internalWorkHistories' => $internalWorkHistories,
             'externalWorkHistories' => $externalWorkHistories,
             'healthRecords' => $healthRecords,
+            'contracts' => $contracts,
             'lmsHistory' => $lmsHistory,
             'employeeId' => $id,
         ]);

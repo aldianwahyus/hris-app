@@ -114,6 +114,7 @@ final class OfficeController extends Controller
         abort_if($office === null, 404);
 
         $validated = $request->validate([
+            'code' => ['required', 'string', 'max:20'],
             'name' => ['required', 'string', 'max:150'],
             'address' => ['nullable', 'string', 'max:500'],
             'office_type' => ['required', 'string', 'in:head_office,branch,sub_branch,functional'],
@@ -135,7 +136,18 @@ final class OfficeController extends Controller
             }
         }
 
+        // Kode dipakai sebagai kunci pencarian saat impor CSV pegawai
+        // baru (lihat ImportNewEmployeeRequests) — BUKAN foreign key
+        // langsung (yang sudah terhubung tetap terhubung lewat office_id
+        // UUID, tidak terpengaruh), jadi aman diubah selama tetap unik.
+        $codeTakenByOther = DB::table('md_offices')->where('code', $validated['code'])->where('id', '!=', $id)->exists();
+
+        if ($codeTakenByOther) {
+            return back()->withInput()->with('gagal', 'Kode kantor itu sudah dipakai kantor lain.');
+        }
+
         DB::table('md_offices')->where('id', $id)->update([
+            'code' => $validated['code'],
             'name' => $validated['name'],
             'address' => $validated['address'] ?? null,
             'office_type' => $validated['office_type'],

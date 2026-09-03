@@ -7,6 +7,7 @@ namespace App\Interfaces\Http\Controllers;
 use App\Modules\Access\Contracts\CurrentActor;
 use App\Modules\Employee\Application\DecideEmployeeProfileChange;
 use App\Modules\Employee\Application\DecideNewEmployeeRequest;
+use App\Modules\Onboarding\Application\GenerateOnboardingChecklist;
 use App\Shared\Audit\Domain\AuditActor;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
@@ -29,6 +30,7 @@ final class EmployeeApprovalQueueController extends Controller
         private readonly CurrentActor $actor,
         private readonly DecideEmployeeProfileChange $decide,
         private readonly DecideNewEmployeeRequest $decideNew,
+        private readonly GenerateOnboardingChecklist $generateOnboarding,
     ) {}
 
     public function index(): View
@@ -89,10 +91,24 @@ final class EmployeeApprovalQueueController extends Controller
 
     public function approveNewEmployee(string $id, Request $request): RedirectResponse
     {
+        $actor = $this->currentActor($request);
+
         try {
-            $newPassword = $this->decideNew->approve($id, $this->currentActor($request));
+            $newPassword = $this->decideNew->approve($id, $actor);
         } catch (DomainException $e) {
             return redirect()->route('admin.employee-approval-queue')->with('gagal', $e->getMessage());
+        }
+
+        // Onboarding Terstruktur — modul baru (evaluasi PM/client
+        // 2026-09-02), dipicu di sini (BUKAN di dalam transaksi
+        // DecideNewEmployeeRequest) pola PERSIS
+        // triggerBekalCutiIfFirstThisYear pada Cuti — modul Employee
+        // tidak boleh mengenal modul Onboarding (ModuleBoundaryTest M-1).
+        $employeeId = DB::table('emp_new_employee_requests')->where('id', $id)->value('created_employee_id');
+
+        if ($employeeId !== null) {
+            $employmentStatus = DB::table('emp_employees')->where('id', $employeeId)->value('employment_status');
+            $this->generateOnboarding->handle($employeeId, $employmentStatus, $actor);
         }
 
         return redirect()->route('admin.employee-approval-queue')

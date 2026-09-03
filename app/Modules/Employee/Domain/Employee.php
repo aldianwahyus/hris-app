@@ -19,5 +19,12 @@ final readonly class Employee
         public string $officeId,
         public string $positionId,
         public EmploymentStatus $employmentStatus,
+        public ?string $separatedAt = null,
     ) {}
+
+    /** Offboarding — akun pegawai yang sudah keluar tidak boleh lagi login (lihat AuthenticateEmployee). */
+    public function isSeparated(): bool
+    {
+        return $this->separatedAt !== null;
+    }
 }

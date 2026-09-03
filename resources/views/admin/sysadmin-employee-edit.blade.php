@@ -63,4 +63,5 @@
 @include('admin._employee-internal-work-history', ['employeeId' => $employeeId, 'internalWorkHistories' => $internalWorkHistories])
 @include('admin._employee-external-work-history', ['employeeId' => $employeeId, 'externalWorkHistories' => $externalWorkHistories])
 @include('admin._employee-health-records', ['employeeId' => $employeeId, 'healthRecords' => $healthRecords])
+@include('admin._employee-contracts', ['employeeId' => $employeeId, 'contracts' => $contracts])
 @endsection

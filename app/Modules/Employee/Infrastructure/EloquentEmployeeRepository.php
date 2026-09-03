@@ -74,6 +74,7 @@ final class EloquentEmployeeRepository implements EmployeeRepository
             officeId: $row->office_id,
             positionId: $row->position_id,
             employmentStatus: EmploymentStatus::from($row->employment_status),
+            separatedAt: $row->separated_at,
         );
     }
 }

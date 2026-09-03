@@ -28,7 +28,11 @@ tbody tr:last-child td{border-bottom:0}
   text-decoration:none;color:var(--teks)}
 .mini:hover{background:var(--latar)}
 .mini.bahaya{color:var(--merah)}
-.aksi{display:flex;gap:6px}
+.aksi{display:flex;gap:6px;flex-wrap:wrap}
+.ttd-status{font-size:10px;font-weight:700;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.ttd-status.sudah{background:var(--hijau-muda);color:var(--hijau-tua)}
+.ttd-status.belum{background:var(--latar);color:var(--teks-lemah)}
+.kode-verifikasi{font-size:10px;color:var(--teks-lemah);margin-top:2px}
 @endsection
 
 @section('isi')
@@ -50,11 +54,12 @@ tbody tr:last-child td{border-bottom:0}
   <table>
     <thead>
       <tr>
-        <th>Nomor SK</th><th>Jenis</th><th>Pegawai</th><th>Tanggal</th><th>Status</th><th></th>
+        <th>Nomor SK</th><th>Jenis</th><th>Pegawai</th><th>Tanggal</th><th>Status</th><th>Tanda Tangan</th><th></th>
       </tr>
     </thead>
     <tbody>
       @forelse ($decisionLetters as $sk)
+        @php $ttd = $signatures->get($sk->id); @endphp
         <tr>
           <td class="angka">{{ $sk->sk_number }}</td>
           <td><span class="jenis">{{ $labelJenis[$sk->sk_type] ?? $sk->sk_type }}</span></td>
@@ -68,10 +73,27 @@ tbody tr:last-child td{border-bottom:0}
             @endif
           </td>
           <td>
+            @if ($ttd)
+              <span class="ttd-status sudah">✓ {{ $ttd->signer_name_snapshot }}</span>
+              <div class="kode-verifikasi">Kode: {{ substr($ttd->document_hash, 0, 8) }}</div>
+            @else
+              <span class="ttd-status belum">Belum ditandatangani</span>
+            @endif
+          </td>
+          <td>
             <div class="aksi">
               @if ($sk->document_path)
                 <a href="{{ route('sk.download', $sk->id) }}" class="mini">Unduh</a>
               @endif
+              @unless ($ttd)
+                <details>
+                  <summary class="mini" style="display:inline-block">Tandatangani</summary>
+                  @include('admin._signature-pad', [
+                    'signAction' => route('signature.store', ['signableType' => 'decision_letter', 'signableId' => $sk->id]),
+                    'contextLabel' => "SK {$sk->sk_number}",
+                  ])
+                </details>
+              @endunless
               <form method="POST" action="{{ route('sk.destroy', $sk->id) }}" data-confirm="Hapus SK ini?">
                 @csrf
                 @method('DELETE')
@@ -82,7 +104,7 @@ tbody tr:last-child td{border-bottom:0}
         </tr>
       @empty
         <tr>
-          <td colspan="6" class="kosong">Belum ada SK.</td>
+          <td colspan="7" class="kosong">Belum ada SK.</td>
         </tr>
       @endforelse
     </tbody>

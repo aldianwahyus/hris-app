@@ -168,7 +168,7 @@ a{color:inherit;text-decoration:none}
     <label for="sisi-toggle" class="sisi-toggle-tombol" aria-label="Buka/tutup menu">☰</label>
     <div class="merek">
       <div class="plat-logo">
-        <img src="{{ asset('images/logo_ntbs-EC94901A.png') }}" alt="Bank NTB Syariah">
+        <img src="{{ asset('images/logo_ntbs-B3F48E62.png') }}" alt="Bank NTB Syariah">
       </div>
       <div>
         <div class="jd">HCIS</div>
@@ -346,6 +346,59 @@ a{color:inherit;text-decoration:none}
           </details>
         @endif
 
+        @if ($bukanAdminSistem || $u->can('document-request.manage'))
+          <details class="grup" open>
+            <summary class="label">Dokumen</summary>
+            @if ($bukanAdminSistem)
+              <a href="{{ route('documents.create') }}" class="{{ $cocok('documents.create') }}">
+                <span class="ic">▧</span> Ajukan Dokumen
+              </a>
+              <a href="{{ route('documents.history') }}" class="{{ $cocok('documents.history') }}">
+                <span class="ic">▧</span> Riwayat Dokumen
+              </a>
+            @endif
+            @can('document-request.manage')
+              <a href="{{ route('admin.document-request-queue') }}" class="{{ $cocok('admin.document-request-queue') }}">
+                <span class="ic">▧</span> Layanan Dokumen Mandiri
+                @isset($badgeCounts['admin.document-request-queue'])<span class="lencana">{{ $badgeCounts['admin.document-request-queue'] }}</span>@endisset
+              </a>
+            @endcan
+          </details>
+        @endif
+
+        @if ($bukanAdminSistem || $u->can('helpdesk.manage'))
+          <details class="grup" open>
+            <summary class="label">Bantuan</summary>
+            @if ($bukanAdminSistem)
+              <a href="{{ route('helpdesk.index') }}" class="{{ $cocok('helpdesk.*') }}">
+                <span class="ic">◈</span> Tiket Bantuan
+              </a>
+            @endif
+            @can('helpdesk.manage')
+              <a href="{{ route('admin.helpdesk-queue') }}" class="{{ $cocok('admin.helpdesk-*') }}">
+                <span class="ic">◈</span> HR Helpdesk
+                @isset($badgeCounts['admin.helpdesk-queue'])<span class="lencana">{{ $badgeCounts['admin.helpdesk-queue'] }}</span>@endisset
+              </a>
+            @endcan
+          </details>
+        @endif
+
+        @if ($bukanAdminSistem || $u->can('survey.manage'))
+          <details class="grup" open>
+            <summary class="label">Survei</summary>
+            @if ($bukanAdminSistem)
+              <a href="{{ route('survey.index') }}" class="{{ $cocok('survey.*') }}">
+                <span class="ic">◫</span> Survei Keterlibatan
+              </a>
+            @endif
+            @can('survey.manage')
+              <a href="{{ route('admin.survey-index') }}" class="{{ $cocok('admin.survey-*') }}">
+                <span class="ic">◫</span> Kelola Survei
+              </a>
+            @endcan
+          </details>
+        @endif
+
         @if ($bukanAdminSistem || $u->can('shift-swap-approval.view'))
           <details class="grup" open>
             <summary class="label">Tukar Shift</summary>
@@ -373,6 +426,9 @@ a{color:inherit;text-decoration:none}
               <a href="{{ route('payslip.index') }}" class="{{ $cocok('payslip.*') }}">
                 <span class="ic">§</span> Slip Gaji
               </a>
+              <a href="{{ route('assets.mine') }}" class="{{ $cocok('assets.mine') }}">
+                <span class="ic">▣</span> Aset Saya
+              </a>
             @endif
             @can('payroll-approval.manage')
               <a href="{{ route('admin.payroll-approval-queue') }}" class="{{ $cocok('admin.payroll-approval-queue') }}">
@@ -385,6 +441,11 @@ a{color:inherit;text-decoration:none}
                 <span class="ic">−</span> Potongan Gaji
               </a>
             @endrole
+            @can('income-recap.view')
+              <a href="{{ route('hr.income-recap') }}" class="{{ $cocok('hr.income-recap') }}">
+                <span class="ic">Σ</span> Rekap Penghasilan
+              </a>
+            @endcan
           </details>
         @endif
 
@@ -473,6 +534,48 @@ a{color:inherit;text-decoration:none}
           </details>
         @endif
 
+        @can('recruitment.manage')
+          <details class="grup" open>
+            <summary class="label">Rekrutmen</summary>
+            <a href="{{ route('admin.recruitment-requisition-index') }}" class="{{ $cocok('admin.recruitment-requisition-*') }}">
+              <span class="ic">⚐</span> Job Requisition
+              @isset($badgeCounts['admin.recruitment-requisition-index'])<span class="lencana">{{ $badgeCounts['admin.recruitment-requisition-index'] }}</span>@endisset
+            </a>
+            <a href="{{ route('admin.recruitment-posting-index') }}" class="{{ $cocok('admin.recruitment-posting-*') }}{{ $cocok('admin.recruitment-pipeline-*') }}{{ $cocok('admin.recruitment-application-*') }}">
+              <span class="ic">⚐</span> Lowongan & Pipeline
+            </a>
+          </details>
+        @endcan
+
+        @can('onboarding.manage')
+          <details class="grup" open>
+            <summary class="label">Onboarding</summary>
+            <a href="{{ route('admin.onboarding-index') }}" class="{{ request()->routeIs('admin.onboarding-index', 'admin.onboarding-show') ? 'aktif' : '' }}">
+              <span class="ic">▲</span> Progres Onboarding
+            </a>
+            <a href="{{ route('admin.onboarding-template-index') }}" class="{{ $cocok('admin.onboarding-template-*') }}">
+              <span class="ic">▲</span> Template Checklist
+            </a>
+          </details>
+        @endcan
+
+        @if ($offboardingExitInterviewEligible || $u->can('offboarding.manage'))
+          <details class="grup" open>
+            <summary class="label">Offboarding</summary>
+            @if ($offboardingExitInterviewEligible)
+              <a href="{{ route('offboarding.exit-interview-form') }}" class="{{ $cocok('offboarding.*') }}">
+                <span class="ic">▼</span> Wawancara Keluar
+              </a>
+            @endif
+            @can('offboarding.manage')
+              <a href="{{ route('admin.offboarding-index') }}" class="{{ $cocok('admin.offboarding-*') }}">
+                <span class="ic">▼</span> Pemisahan Pegawai
+                @isset($badgeCounts['admin.offboarding-index'])<span class="lencana">{{ $badgeCounts['admin.offboarding-index'] }}</span>@endisset
+              </a>
+            @endcan
+          </details>
+        @endif
+
         @can('audit-log.view')
           <details class="grup" open>
             <summary class="label">Pengawasan</summary>
@@ -516,8 +619,11 @@ a{color:inherit;text-decoration:none}
               <a href="{{ route('sysadmin.office-formasi.index') }}" class="{{ $cocok('sysadmin.office-formasi.*') }}">
                 <span class="ic">Σ</span> Formasi Kantor
               </a>
-              <a href="{{ route('sysadmin.offices.index') }}" class="{{ $cocok('sysadmin.offices.*') }}">
+              <a href="{{ route('sysadmin.offices.index') }}" class="{{ $cocok('sysadmin.offices.index') }}">
                 <span class="ic">⌂</span> Daftar Kantor
+              </a>
+              <a href="{{ route('sysadmin.offices.import.index') }}" class="{{ $cocok('sysadmin.offices.import.*') }}">
+                <span class="ic">⇈</span> Impor Kantor
               </a>
               <a href="{{ route('sysadmin.positions.index') }}" class="{{ $cocok('sysadmin.positions.*') }}">
                 <span class="ic">☰</span> Daftar Jabatan
@@ -527,6 +633,11 @@ a{color:inherit;text-decoration:none}
               </a>
               <a href="{{ route('sysadmin.mobile-menu.index') }}" class="{{ $cocok('sysadmin.mobile-menu.*') }}">
                 <span class="ic">▦</span> Menu Aplikasi Mobile
+              </a>
+            @endcan
+            @can('asset.manage')
+              <a href="{{ route('sysadmin.assets.index') }}" class="{{ $cocok('sysadmin.assets.index') }}">
+                <span class="ic">▣</span> Manajemen Aset
               </a>
             @endcan
           </details>

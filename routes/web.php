@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
+use App\Interfaces\Http\Controllers\ApplicationPipelineController;
 use App\Interfaces\Http\Controllers\ApprovalQueueController;
 use App\Interfaces\Http\Controllers\AssessmentController;
+use App\Interfaces\Http\Controllers\AssetAssignmentController;
+use App\Interfaces\Http\Controllers\AssetController;
 use App\Interfaces\Http\Controllers\AttendanceDeviceImportController;
 use App\Interfaces\Http\Controllers\AttendanceRecapController;
 use App\Interfaces\Http\Controllers\AuditLogController;
@@ -12,10 +15,13 @@ use App\Interfaces\Http\Controllers\BranchDashboardController;
 use App\Interfaces\Http\Controllers\CompetencyController;
 use App\Interfaces\Http\Controllers\DashboardController;
 use App\Interfaces\Http\Controllers\DecisionLetterController;
+use App\Interfaces\Http\Controllers\DocumentRequestController;
+use App\Interfaces\Http\Controllers\DocumentRequestQueueController;
 use App\Interfaces\Http\Controllers\EmployeeApprovalQueueController;
 use App\Interfaces\Http\Controllers\EmployeeAwardController;
 use App\Interfaces\Http\Controllers\EmployeeCertificationController;
 use App\Interfaces\Http\Controllers\EmployeeCompetencyController;
+use App\Interfaces\Http\Controllers\EmployeeContractController;
 use App\Interfaces\Http\Controllers\EmployeeCvController;
 use App\Interfaces\Http\Controllers\EmployeeDirectoryController;
 use App\Interfaces\Http\Controllers\EmployeeExternalWorkHistoryController;
@@ -29,7 +35,13 @@ use App\Interfaces\Http\Controllers\EmployeeTrainingController;
 use App\Interfaces\Http\Controllers\ForumModerationController;
 use App\Interfaces\Http\Controllers\GamificationController;
 use App\Interfaces\Http\Controllers\HcDashboardController;
+use App\Interfaces\Http\Controllers\HelpdeskController;
+use App\Interfaces\Http\Controllers\HelpdeskQueueController;
+use App\Interfaces\Http\Controllers\IncomeRecapController;
 use App\Interfaces\Http\Controllers\IzinApprovalController;
+use App\Interfaces\Http\Controllers\JobOfferController;
+use App\Interfaces\Http\Controllers\JobPostingController;
+use App\Interfaces\Http\Controllers\JobRequisitionController;
 use App\Interfaces\Http\Controllers\JournalAccountController;
 use App\Interfaces\Http\Controllers\LearningPathController;
 use App\Interfaces\Http\Controllers\LeaveApprovalQueueController;
@@ -48,26 +60,35 @@ use App\Interfaces\Http\Controllers\LmsLiveSessionController;
 use App\Interfaces\Http\Controllers\MobileMenuSettingsController;
 use App\Interfaces\Http\Controllers\NationalHolidayController;
 use App\Interfaces\Http\Controllers\NotificationController;
+use App\Interfaces\Http\Controllers\OffboardingController;
+use App\Interfaces\Http\Controllers\OffboardingQueueController;
 use App\Interfaces\Http\Controllers\OfficeController;
 use App\Interfaces\Http\Controllers\OfficeFormasiController;
 use App\Interfaces\Http\Controllers\OfficeGeofenceController;
+use App\Interfaces\Http\Controllers\OfficeImportController;
+use App\Interfaces\Http\Controllers\OnboardingProgressController;
+use App\Interfaces\Http\Controllers\OnboardingTemplateController;
 use App\Interfaces\Http\Controllers\OrganizationChartController;
 use App\Interfaces\Http\Controllers\OutsideAttendanceApprovalController;
 use App\Interfaces\Http\Controllers\OvertimeDisbursementController;
 use App\Interfaces\Http\Controllers\OvertimeRecapController;
 use App\Interfaces\Http\Controllers\PayrollApprovalController;
 use App\Interfaces\Http\Controllers\PositionController;
+use App\Interfaces\Http\Controllers\PublicCareersController;
 use App\Interfaces\Http\Controllers\RoleFeatureMapController;
 use App\Interfaces\Http\Controllers\SalaryScaleController;
 use App\Interfaces\Http\Controllers\ShiftAssignmentController;
 use App\Interfaces\Http\Controllers\ShiftPatternController;
 use App\Interfaces\Http\Controllers\ShiftSwapApprovalController;
+use App\Interfaces\Http\Controllers\SignatureController;
 use App\Interfaces\Http\Controllers\SppdApprovalController;
 use App\Interfaces\Http\Controllers\SppdDisbursementController;
 use App\Interfaces\Http\Controllers\SppdMemoController;
 use App\Interfaces\Http\Controllers\SppdPaymentBatchController;
 use App\Interfaces\Http\Controllers\SppdTariffAdminController;
 use App\Interfaces\Http\Controllers\SuccessionPlanController;
+use App\Interfaces\Http\Controllers\SurveyAdminController;
+use App\Interfaces\Http\Controllers\SurveyController;
 use App\Interfaces\Http\Controllers\SystemAdminEmployeeController;
 use App\Interfaces\Http\Controllers\SystemAdminUserController;
 use App\Interfaces\Http\Controllers\SystemParameterController;
@@ -109,6 +130,24 @@ Route::middleware(['guest', 'throttle:30,1'])->group(function () {
 
 Route::post('/keluar', LogoutController::class)->middleware('auth')->name('logout');
 
+// Rekrutmen (ATS) — halaman karier PUBLIK, modul baru (evaluasi
+// PM/client 2026-09-02). SENGAJA di LUAR grup 'auth' (siapa pun bisa
+// melamar tanpa akun HCIS) — SATU throttle:30,1 untuk seluruh grup
+// (pola PERSIS /masuk: pagar tambahan kasar, bukan pembatas halus
+// per rute — RateLimiter bawaan Laravel membagi SATU bilik hitung
+// per IP+domain lintas middleware throttle apa pun, jadi menumpuk
+// tingkatan berbeda di sini hanya akan membuat rute GET biasa ikut
+// menghabiskan jatah rute POST tanpa manfaat nyata).
+Route::middleware('throttle:30,1')->group(function () {
+    Route::prefix('lowongan')->name('careers.')->group(function () {
+        Route::get('/', [PublicCareersController::class, 'index'])->name('index');
+        Route::get('/{id}', [PublicCareersController::class, 'show'])->name('show');
+        Route::post('/{id}/lamar', [PublicCareersController::class, 'apply'])->name('apply');
+    });
+    Route::get('/tawaran/{token}', [PublicCareersController::class, 'offerForm'])->name('careers.offer');
+    Route::post('/tawaran/{token}', [PublicCareersController::class, 'respondToOffer'])->name('careers.offer-respond');
+});
+
 // throttle:60,1 (1 permintaan/detik rata-rata) — jauh di atas kecepatan
 // klik manusia wajar, tapi menumpulkan penyalahgunaan otomatis atas
 // sesi yang bocor/dicuri. Lapisan tambahan, bukan pengganti autentikasi.
@@ -128,6 +167,11 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
     // atas, cermin NotificationApiController mobile.
     Route::get('/notifikasi', [NotificationController::class, 'index'])->name('notifikasi.index');
     Route::post('/notifikasi/{id}/baca', [NotificationController::class, 'markAsRead'])->name('notifikasi.baca');
+
+    // Tanda Tangan Elektronik (internal) — generik lintas jenis dokumen,
+    // otorisasi per jenis ditegakkan DI DALAM SignatureController
+    // (bukan middleware permission tunggal di sini), lihat resolveContext().
+    Route::post('/tanda-tangan/{signableType}/{signableId}', [SignatureController::class, 'store'])->name('signature.store');
 
     // "CV Saya" — data organisasi HANYA-BACA, data pribadi
     // (SelfEditableEmployeeField) diubah LANGSUNG tanpa persetujuan
@@ -207,6 +251,9 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
     Route::get('/slip-gaji', [PayslipController::class, 'index'])->name('payslip.index');
     Route::get('/slip-gaji/{id}/unduh', [PayslipController::class, 'download'])->name('payslip.download');
 
+    // Aset Saya — baca saja, lingkup SELF (lihat AssetAssignmentController::mine()).
+    Route::get('/aset-saya', [AssetAssignmentController::class, 'mine'])->name('assets.mine');
+
     // Tahap 6 — SPPD (BPP/442/03/64/2026). Selalu atas nama pegawai yang
     // sedang masuk (ownership); tidak ada parameter employee_id di sini.
     Route::prefix('sppd')->name('sppd.')->group(function () {
@@ -240,6 +287,44 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
         // Batal HANYA saat status='pending' (Izin satu tahap saja) —
         // ditegakkan di CancelIzinRequest, bukan di sini.
         Route::post('/{id}/batal', [IzinRequestController::class, 'cancelRequest'])->name('cancel');
+    });
+
+    // Layanan Dokumen Mandiri — modul baru (evaluasi PM/client
+    // 2026-09-02), lingkup SELF murni, pola sama Izin di atas.
+    Route::prefix('dokumen')->name('documents.')->group(function () {
+        Route::get('/ajukan', [DocumentRequestController::class, 'create'])->name('create');
+        Route::post('/ajukan', [DocumentRequestController::class, 'store'])->name('store');
+        Route::get('/riwayat', [DocumentRequestController::class, 'history'])->name('history');
+        Route::get('/{id}/unduh', [DocumentRequestController::class, 'download'])->name('download');
+    });
+
+    // HR Helpdesk / Case Management — modul baru (evaluasi PM/client
+    // 2026-09-02), lingkup SELF murni. Tiket + balasan dua arah, lihat
+    // HelpdeskQueueController untuk sisi HC.
+    Route::prefix('bantuan')->name('helpdesk.')->group(function () {
+        Route::get('/', [HelpdeskController::class, 'index'])->name('index');
+        Route::get('/ajukan', [HelpdeskController::class, 'create'])->name('create');
+        Route::post('/ajukan', [HelpdeskController::class, 'store'])->name('store');
+        Route::get('/{id}', [HelpdeskController::class, 'show'])->name('show');
+        Route::post('/{id}/balas', [HelpdeskController::class, 'reply'])->name('reply');
+    });
+
+    // Survei Keterlibatan (eNPS/Pulse) — modul baru (evaluasi PM/client
+    // 2026-09-02), lingkup SELF: survei bank_wide ATAU scope kantor
+    // pegawai, lihat SurveyController::eligibleSurvey().
+    Route::prefix('survei')->name('survey.')->group(function () {
+        Route::get('/', [SurveyController::class, 'index'])->name('index');
+        Route::get('/{id}', [SurveyController::class, 'fill'])->name('fill');
+        Route::post('/{id}', [SurveyController::class, 'submit'])->name('submit');
+    });
+
+    // Offboarding — modul baru (evaluasi PM/client 2026-09-02). HANYA
+    // wawancara keluar yang berupa ESS (pengajuan/keputusan/clearance
+    // murni admin, lihat OffboardingQueueController) — lingkup SELF,
+    // dibatasi ke pemisahan MILIK SENDIRI berstatus 'approved'.
+    Route::prefix('wawancara-keluar')->name('offboarding.')->group(function () {
+        Route::get('/', [OffboardingController::class, 'exitInterviewForm'])->name('exit-interview-form');
+        Route::post('/', [OffboardingController::class, 'storeExitInterview'])->name('exit-interview-store');
     });
 
     // Pelatihan (LMS) — pegawai jelajah jadwal terbuka & mendaftar
@@ -473,6 +558,182 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
             ->middleware('permission:izin-approval.view')
             ->name('izin-attachment');
 
+        // Layanan Dokumen Mandiri — modul baru (evaluasi PM/client
+        // 2026-09-02), SATU tahap (pola PERSIS Izin di atas).
+        Route::get('/dokumen', [DocumentRequestQueueController::class, 'index'])
+            ->middleware('permission:document-request.manage')
+            ->name('document-request-queue');
+        Route::post('/dokumen/{id}/setujui', [DocumentRequestQueueController::class, 'issue'])
+            ->middleware('permission:document-request.manage')
+            ->name('document-request-issue');
+        Route::post('/dokumen/{id}/tolak', [DocumentRequestQueueController::class, 'reject'])
+            ->middleware('permission:document-request.manage')
+            ->name('document-request-reject');
+        Route::get('/dokumen/{id}/unduh', [DocumentRequestQueueController::class, 'download'])
+            ->middleware('permission:document-request.manage')
+            ->name('document-request-download');
+
+        // HR Helpdesk / Case Management — modul baru (evaluasi PM/client
+        // 2026-09-02), SATU tahap. hr_admin lingkup kantornya sendiri,
+        // hr_approver seluruh bank — lihat HelpdeskQueueController.
+        Route::get('/bantuan', [HelpdeskQueueController::class, 'index'])
+            ->middleware('permission:helpdesk.manage')
+            ->name('helpdesk-queue');
+        Route::get('/bantuan/{id}', [HelpdeskQueueController::class, 'show'])
+            ->middleware('permission:helpdesk.manage')
+            ->name('helpdesk-show');
+        Route::post('/bantuan/{id}/balas', [HelpdeskQueueController::class, 'reply'])
+            ->middleware('permission:helpdesk.manage')
+            ->name('helpdesk-reply');
+        Route::post('/bantuan/{id}/tugaskan', [HelpdeskQueueController::class, 'assign'])
+            ->middleware('permission:helpdesk.manage')
+            ->name('helpdesk-assign');
+        Route::post('/bantuan/{id}/status', [HelpdeskQueueController::class, 'updateStatus'])
+            ->middleware('permission:helpdesk.manage')
+            ->name('helpdesk-status');
+
+        // Survei Keterlibatan (eNPS/Pulse) — modul baru (evaluasi PM/client
+        // 2026-09-02). hr_admin kantornya sendiri + bank-wide, hr_approver
+        // seluruhnya — lihat SurveyAdminController::scopedSurvey().
+        Route::get('/survei', [SurveyAdminController::class, 'index'])
+            ->middleware('permission:survey.manage')
+            ->name('survey-index');
+        Route::get('/survei/buat', [SurveyAdminController::class, 'create'])
+            ->middleware('permission:survey.manage')
+            ->name('survey-create');
+        Route::post('/survei/buat', [SurveyAdminController::class, 'store'])
+            ->middleware('permission:survey.manage')
+            ->name('survey-store');
+        Route::get('/survei/{id}', [SurveyAdminController::class, 'show'])
+            ->middleware('permission:survey.manage')
+            ->name('survey-show');
+        Route::post('/survei/{id}/terbitkan', [SurveyAdminController::class, 'publish'])
+            ->middleware('permission:survey.manage')
+            ->name('survey-publish');
+        Route::post('/survei/{id}/tutup', [SurveyAdminController::class, 'close'])
+            ->middleware('permission:survey.manage')
+            ->name('survey-close');
+
+        // Onboarding Terstruktur — modul baru (evaluasi PM/client
+        // 2026-09-02). Template routes (literal) WAJIB terdaftar SEBELUM
+        // wildcard /onboarding/{id} — pola sama Impor Kantor (bug
+        // ditemukan sebelumnya bila wildcard didaftar lebih dulu).
+        Route::get('/onboarding/template', [OnboardingTemplateController::class, 'index'])
+            ->middleware('permission:onboarding.manage')
+            ->name('onboarding-template-index');
+        Route::get('/onboarding/template/buat', [OnboardingTemplateController::class, 'create'])
+            ->middleware('permission:onboarding.manage')
+            ->name('onboarding-template-create');
+        Route::post('/onboarding/template/buat', [OnboardingTemplateController::class, 'store'])
+            ->middleware('permission:onboarding.manage')
+            ->name('onboarding-template-store');
+        Route::post('/onboarding/template/{id}/toggle', [OnboardingTemplateController::class, 'toggleActive'])
+            ->middleware('permission:onboarding.manage')
+            ->name('onboarding-template-toggle');
+        Route::get('/onboarding', [OnboardingProgressController::class, 'index'])
+            ->middleware('permission:onboarding.manage')
+            ->name('onboarding-index');
+        Route::get('/onboarding/{id}', [OnboardingProgressController::class, 'show'])
+            ->middleware('permission:onboarding.manage')
+            ->name('onboarding-show');
+        Route::post('/onboarding/{checklistId}/item/{itemId}', [OnboardingProgressController::class, 'completeItem'])
+            ->middleware('permission:onboarding.manage')
+            ->name('onboarding-item-complete');
+
+        // Offboarding — modul baru (evaluasi PM/client 2026-09-02).
+        // Maker-checker (pola PERSIS pegawai-baru): hr_admin/hr_approver
+        // ajukan, hr_approver putuskan. Literal /buat WAJIB sebelum
+        // wildcard /{id} — pola sama Impor Kantor.
+        Route::get('/offboarding', [OffboardingQueueController::class, 'index'])
+            ->middleware('permission:offboarding.manage')
+            ->name('offboarding-index');
+        Route::get('/offboarding/buat', [OffboardingQueueController::class, 'create'])
+            ->middleware('permission:offboarding.manage')
+            ->name('offboarding-create');
+        Route::post('/offboarding/buat', [OffboardingQueueController::class, 'store'])
+            ->middleware('permission:offboarding.manage')
+            ->name('offboarding-store');
+        Route::get('/offboarding/{id}', [OffboardingQueueController::class, 'show'])
+            ->middleware('permission:offboarding.manage')
+            ->name('offboarding-show');
+        Route::post('/offboarding/{id}/setujui', [OffboardingQueueController::class, 'approve'])
+            ->middleware('permission:offboarding.manage')
+            ->name('offboarding-approve');
+        Route::post('/offboarding/{id}/tolak', [OffboardingQueueController::class, 'reject'])
+            ->middleware('permission:offboarding.manage')
+            ->name('offboarding-reject');
+        Route::post('/offboarding/{separationId}/item/{itemId}', [OffboardingQueueController::class, 'completeItem'])
+            ->middleware('permission:offboarding.manage')
+            ->name('offboarding-item-complete');
+        Route::post('/offboarding/{id}/tuntaskan', [OffboardingQueueController::class, 'markComplete'])
+            ->middleware('permission:offboarding.manage')
+            ->name('offboarding-complete');
+        Route::post('/offboarding/{id}/wawancara-keluar', [OffboardingQueueController::class, 'storeExitInterview'])
+            ->middleware('permission:offboarding.manage')
+            ->name('offboarding-exit-interview-store');
+
+        // Rekrutmen (ATS) — modul baru (evaluasi PM/client 2026-09-02),
+        // TERBESAR dari 9 modul. Requisition pakai permission TERPISAH
+        // (recruitment-requisition.decide, hr_approver saja) — beda dari
+        // operasional ATS sehari-hari (recruitment.manage). Literal
+        // /buat WAJIB sebelum wildcard /{id} — pola sama modul lain.
+        Route::get('/rekrutmen/requisition', [JobRequisitionController::class, 'index'])
+            ->middleware('permission:recruitment.manage')
+            ->name('recruitment-requisition-index');
+        Route::get('/rekrutmen/requisition/buat', [JobRequisitionController::class, 'create'])
+            ->middleware('permission:recruitment.manage')
+            ->name('recruitment-requisition-create');
+        Route::post('/rekrutmen/requisition/buat', [JobRequisitionController::class, 'store'])
+            ->middleware('permission:recruitment.manage')
+            ->name('recruitment-requisition-store');
+        Route::get('/rekrutmen/requisition/{id}', [JobRequisitionController::class, 'show'])
+            ->middleware('permission:recruitment.manage')
+            ->name('recruitment-requisition-show');
+        Route::post('/rekrutmen/requisition/{id}/setujui', [JobRequisitionController::class, 'approve'])
+            ->middleware('permission:recruitment-requisition.decide')
+            ->name('recruitment-requisition-approve');
+        Route::post('/rekrutmen/requisition/{id}/tolak', [JobRequisitionController::class, 'reject'])
+            ->middleware('permission:recruitment-requisition.decide')
+            ->name('recruitment-requisition-reject');
+
+        Route::get('/rekrutmen/lowongan', [JobPostingController::class, 'index'])
+            ->middleware('permission:recruitment.manage')
+            ->name('recruitment-posting-index');
+        Route::get('/rekrutmen/lowongan/buat', [JobPostingController::class, 'create'])
+            ->middleware('permission:recruitment.manage')
+            ->name('recruitment-posting-create');
+        Route::post('/rekrutmen/lowongan/buat', [JobPostingController::class, 'store'])
+            ->middleware('permission:recruitment.manage')
+            ->name('recruitment-posting-store');
+        Route::post('/rekrutmen/lowongan/{id}/tutup', [JobPostingController::class, 'close'])
+            ->middleware('permission:recruitment.manage')
+            ->name('recruitment-posting-close');
+        Route::get('/rekrutmen/lowongan/{postingId}/pipeline', [ApplicationPipelineController::class, 'index'])
+            ->middleware('permission:recruitment.manage')
+            ->name('recruitment-pipeline-index');
+
+        Route::get('/rekrutmen/lamaran/{id}', [ApplicationPipelineController::class, 'show'])
+            ->middleware('permission:recruitment.manage')
+            ->name('recruitment-application-show');
+        Route::get('/rekrutmen/lamaran/{id}/cv', [ApplicationPipelineController::class, 'downloadResume'])
+            ->middleware('permission:recruitment.manage')
+            ->name('recruitment-application-resume');
+        Route::post('/rekrutmen/lamaran/{id}/tahap', [ApplicationPipelineController::class, 'updateStage'])
+            ->middleware('permission:recruitment.manage')
+            ->name('recruitment-application-stage');
+        Route::post('/rekrutmen/lamaran/{id}/wawancara', [ApplicationPipelineController::class, 'scheduleInterview'])
+            ->middleware('permission:recruitment.manage')
+            ->name('recruitment-application-interview');
+        Route::post('/rekrutmen/lamaran/{id}/wawancara/{interviewId}/feedback', [ApplicationPipelineController::class, 'recordInterviewFeedback'])
+            ->middleware('permission:recruitment.manage')
+            ->name('recruitment-application-interview-feedback');
+        Route::post('/rekrutmen/lamaran/{id}/tawaran', [JobOfferController::class, 'store'])
+            ->middleware('permission:recruitment.manage')
+            ->name('recruitment-application-offer');
+        Route::post('/rekrutmen/lamaran/{id}/jadikan-pegawai', [ApplicationPipelineController::class, 'convertToEmployee'])
+            ->middleware('permission:recruitment.manage')
+            ->name('recruitment-application-convert');
+
         // Pelatihan — 1 TAHAP, Atasan Langsung SAJA (pola sama Tukar
         // Shift, tidak berdampak finansial langsung). Auditor hanya-baca.
         Route::get('/pelatihan', [LmsEnrollmentApprovalController::class, 'index'])
@@ -567,6 +828,12 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
 
             Route::post('/riwayat-kesehatan', [EmployeeHealthRecordController::class, 'store'])->name('health-record.store');
             Route::delete('/riwayat-kesehatan/{id}', [EmployeeHealthRecordController::class, 'destroy'])->name('health-record.destroy');
+
+            // Manajemen Kontrak (pegawai kontrak/outsource) — modul baru
+            // (evaluasi PM/client 2026-09-02), pola SAMA sub-resource di atas.
+            Route::post('/kontrak', [EmployeeContractController::class, 'store'])->name('contract.store');
+            Route::post('/kontrak/{contractId}/perpanjang', [EmployeeContractController::class, 'renew'])->name('contract.renew');
+            Route::post('/kontrak/{contractId}/status', [EmployeeContractController::class, 'updateStatus'])->name('contract.status');
         });
 
     // Surat Keputusan (SK) — modul TERSENDIRI (BUKAN bagian dari Data
@@ -767,6 +1034,17 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
         ->middleware('permission:overtime-recap.view')
         ->name('hr.overtime-recap.export');
 
+    // Rekap Penghasilan — gaji+lembur+SPPD+bekal cuti dijumlah per
+    // pegawai per bulan, lingkup SAMA overtime-recap.view (hr_admin:
+    // kantornya sendiri, hr_approver: seluruh bank) — lihat
+    // IncomeRecapController.
+    Route::get('/pegawai/penghasilan', [IncomeRecapController::class, 'index'])
+        ->middleware('permission:income-recap.view')
+        ->name('hr.income-recap');
+    Route::get('/pegawai/penghasilan/ekspor', [IncomeRecapController::class, 'exportCsv'])
+        ->middleware('permission:income-recap.view')
+        ->name('hr.income-recap.export');
+
     // Pembayaran Lembur MASSAL (Admin Cabang) — HANYA cabang/KCP
     // miliknya sendiri. Kantor pusat dibayar Admin HC lewat rute
     // admin.overtime-disbursement-queue di atas.
@@ -927,6 +1205,20 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
         // Tidak bisa dihapus, hanya dinonaktifkan (is_active).
         Route::get('/daftar-kantor', [OfficeController::class, 'index'])->name('offices.index');
         Route::post('/daftar-kantor', [OfficeController::class, 'store'])->name('offices.store');
+
+        // Impor massal kantor — TIDAK ada antrean persetujuan (beda dari
+        // impor pegawai), baris yang lolos LANGSUNG aktif, lihat
+        // ImportOffices/OfficeImportController. WAJIB terdaftar SEBELUM
+        // offices.update ({id} wildcard) di bawah — urutan terbalik
+        // membuat POST /daftar-kantor/impor tertangkap sebagai {id}="impor"
+        // (bug ditemukan lewat pengujian: "invalid input syntax for type
+        // uuid: impor").
+        Route::get('/daftar-kantor/impor', [OfficeImportController::class, 'index'])->name('offices.import.index');
+        Route::get('/daftar-kantor/impor/contoh', [OfficeImportController::class, 'template'])->name('offices.import.template');
+        Route::post('/daftar-kantor/impor', [OfficeImportController::class, 'import'])
+            ->middleware('throttle:10,1')
+            ->name('offices.import.store');
+
         Route::post('/daftar-kantor/{id}', [OfficeController::class, 'update'])->name('offices.update');
 
         Route::get('/daftar-jabatan', [PositionController::class, 'index'])->name('positions.index');
@@ -943,5 +1235,16 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
         // (lihat MobileMenuSettingsController).
         Route::get('/menu-mobile', [MobileMenuSettingsController::class, 'index'])->name('mobile-menu.index');
         Route::post('/menu-mobile', [MobileMenuSettingsController::class, 'update'])->name('mobile-menu.update');
+    });
+
+    // Manajemen Aset — permission TERPISAH dari sysadmin-content.manage
+    // (hr_admin: kantornya sendiri, hr_approver/system_admin: seluruh
+    // bank — lihat AssetController::index()).
+    Route::prefix('admin/sistem')->name('sysadmin.')->middleware('permission:asset.manage')->group(function () {
+        Route::get('/aset', [AssetController::class, 'index'])->name('assets.index');
+        Route::post('/aset', [AssetController::class, 'store'])->name('assets.store');
+        Route::post('/aset/{id}', [AssetController::class, 'update'])->name('assets.update');
+        Route::post('/aset/{id}/tugaskan', [AssetAssignmentController::class, 'assign'])->name('assets.assign');
+        Route::post('/penugasan-aset/{id}/kembalikan', [AssetAssignmentController::class, 'returnAsset'])->name('assets.return');
     });
 });

@@ -42,6 +42,9 @@ enum AuditAction: string
     case LoggedOut = 'logged_out';
     case Reopened = 'reopened';
 
+    // Tanda Tangan Elektronik (internal) — lihat App\Shared\Signature.
+    case Signed = 'signed';
+
     /**
      * Tindakan yang berdampak finansial atau menyangkut hak pegawai.
      * Wajib mencantumkan dasar (context_ref) — mis. nomor SPKL atau SK.
@@ -56,6 +59,7 @@ enum AuditAction: string
             self::Expired,
             self::Disbursed,
             self::Reopened,
+            self::Signed,
         ], true);
     }
 }

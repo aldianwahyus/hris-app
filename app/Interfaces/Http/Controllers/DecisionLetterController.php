@@ -68,7 +68,17 @@ final class DecisionLetterController extends Controller
 
         $decisionLetters = $query->orderByDesc('d.sk_date')->orderBy('d.sk_number')->get();
 
-        return view('admin.decision-letter-index', compact('decisionLetters', 'bankWide'));
+        // Tanda Tangan Elektronik — dipetakan per SK (satu SK bisa
+        // ditandatangani lebih dari satu pejabat, tampilkan yang PALING
+        // BARU saja di daftar ringkas ini).
+        $signatures = DB::table('sig_signatures')
+            ->where('signable_type', 'decision_letter')
+            ->whereIn('signable_id', $decisionLetters->pluck('id'))
+            ->orderByDesc('signed_at')
+            ->get()
+            ->keyBy('signable_id');
+
+        return view('admin.decision-letter-index', compact('decisionLetters', 'bankWide', 'signatures'));
     }
 
     public function create(): View

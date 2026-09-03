@@ -50,6 +50,7 @@ final class OfficeDirectoryAdminTest extends TestCase
         $office = DB::table('md_offices')->where('code', 'KCP-UJI2')->first();
 
         $response = $this->actingAs($this->userWithNrp('2014.02.0061'))->post("/admin/sistem/daftar-kantor/{$office->id}", [
+            'code' => $office->code,
             'name' => 'KCP Uji Dua (Diubah)',
             'office_type' => 'sub_branch',
             'timezone' => 'Asia/Makassar',
@@ -57,6 +58,53 @@ final class OfficeDirectoryAdminTest extends TestCase
 
         $response->assertRedirect(route('sysadmin.offices.index'));
         $this->assertSame('KCP Uji Dua (Diubah)', DB::table('md_offices')->where('id', $office->id)->value('name'));
+    }
+
+    /**
+     * Celah ditemukan lewat evaluasi PM/client (2026-09-01): kode kantor
+     * SEBELUMNYA tidak bisa diubah sama sekali (hanya kolom lain yang
+     * bisa disunting inline) — sekarang bisa, selama tetap unik. Kode
+     * BUKAN foreign key langsung (dipakai sebagai kunci pencarian SAAT
+     * impor CSV pegawai baru saja, lihat ImportNewEmployeeRequests) —
+     * mengubahnya tidak memutus tautan office_id pegawai yang sudah ada.
+     */
+    public function test_kode_kantor_dapat_diubah(): void
+    {
+        $office = DB::table('md_offices')->first();
+
+        $response = $this->actingAs($this->sysAdmin())->post("/admin/sistem/daftar-kantor/{$office->id}", [
+            'code' => 'KP-BARU',
+            'name' => $office->name,
+            'office_type' => $office->office_type,
+            'timezone' => $office->timezone,
+            'is_active' => '1',
+        ]);
+
+        $response->assertRedirect(route('sysadmin.offices.index'));
+        $this->assertSame('KP-BARU', DB::table('md_offices')->where('id', $office->id)->value('code'));
+    }
+
+    public function test_kode_kantor_duplikat_ditolak_saat_diubah(): void
+    {
+        $this->actingAs($this->sysAdmin())->post('/admin/sistem/daftar-kantor', [
+            'code' => 'KCP-UJI3',
+            'name' => 'KCP Uji Tiga',
+            'office_type' => 'sub_branch',
+            'timezone' => 'Asia/Makassar',
+        ]);
+
+        $existingCode = DB::table('md_offices')->where('code', '!=', 'KCP-UJI3')->value('code');
+        $officeToEdit = DB::table('md_offices')->where('code', 'KCP-UJI3')->first();
+
+        $response = $this->actingAs($this->sysAdmin())->post("/admin/sistem/daftar-kantor/{$officeToEdit->id}", [
+            'code' => $existingCode,
+            'name' => $officeToEdit->name,
+            'office_type' => $officeToEdit->office_type,
+            'timezone' => $officeToEdit->timezone,
+        ]);
+
+        $response->assertSessionHas('gagal');
+        $this->assertSame('KCP-UJI3', DB::table('md_offices')->where('id', $officeToEdit->id)->value('code'));
     }
 
     public function test_kode_kantor_duplikat_ditolak(): void
@@ -75,12 +123,13 @@ final class OfficeDirectoryAdminTest extends TestCase
 
     public function test_kantor_tidak_dapat_menjadi_induk_dirinya_sendiri(): void
     {
-        $officeId = DB::table('md_offices')->value('id');
+        $office = DB::table('md_offices')->first();
 
-        $response = $this->actingAs($this->sysAdmin())->post("/admin/sistem/daftar-kantor/{$officeId}", [
+        $response = $this->actingAs($this->sysAdmin())->post("/admin/sistem/daftar-kantor/{$office->id}", [
+            'code' => $office->code,
             'name' => 'Uji',
             'office_type' => 'branch',
-            'parent_office_id' => $officeId,
+            'parent_office_id' => $office->id,
             'timezone' => 'Asia/Makassar',
         ]);
 
@@ -93,6 +142,7 @@ final class OfficeDirectoryAdminTest extends TestCase
         $employeeCountBefore = DB::table('emp_employees')->where('office_id', $office->id)->count();
 
         $response = $this->actingAs($this->sysAdmin())->post("/admin/sistem/daftar-kantor/{$office->id}", [
+            'code' => $office->code,
             'name' => $office->name,
             'office_type' => $office->office_type,
             'timezone' => $office->timezone,

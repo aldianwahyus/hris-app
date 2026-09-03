@@ -6,10 +6,14 @@ namespace App\Interfaces\Http\Support;
 
 use App\Interfaces\Http\Controllers\ApprovalQueueController;
 use App\Interfaces\Http\Controllers\BekalCutiDisbursementController;
+use App\Interfaces\Http\Controllers\DocumentRequestQueueController;
 use App\Interfaces\Http\Controllers\EmployeeApprovalQueueController;
+use App\Interfaces\Http\Controllers\HelpdeskQueueController;
 use App\Interfaces\Http\Controllers\IzinApprovalController;
+use App\Interfaces\Http\Controllers\JobRequisitionController;
 use App\Interfaces\Http\Controllers\LeaveApprovalQueueController;
 use App\Interfaces\Http\Controllers\LmsEnrollmentApprovalController;
+use App\Interfaces\Http\Controllers\OffboardingQueueController;
 use App\Interfaces\Http\Controllers\OutsideAttendanceApprovalController;
 use App\Interfaces\Http\Controllers\OvertimeDisbursementController;
 use App\Interfaces\Http\Controllers\PayrollApprovalController;
@@ -70,6 +74,13 @@ final class ComputeNavigationBadgeCounts
             $counts['admin.overtime-disbursement-queue'] = $this->safeCount(fn () => app(OvertimeDisbursementController::class)->pendingCountHc());
             $counts['admin.sppd-disbursement-queue'] = $this->safeCount(fn () => app(SppdDisbursementController::class)->pendingCountHc());
             $counts['admin.bekal-cuti-queue'] = $this->safeCount(fn () => app(BekalCutiDisbursementController::class)->pendingCountHc());
+            $counts['admin.recruitment-requisition-index'] = $this->safeCount(fn () => app(JobRequisitionController::class)->pendingCount());
+        }
+
+        if ($has('hr_admin', 'hr_approver')) {
+            $counts['admin.document-request-queue'] = $this->safeCount(fn () => app(DocumentRequestQueueController::class)->pendingCount());
+            $counts['admin.helpdesk-queue'] = $this->safeCount(fn () => app(HelpdeskQueueController::class)->pendingCount());
+            $counts['admin.offboarding-index'] = $this->safeCount(fn () => app(OffboardingQueueController::class)->pendingCount());
         }
 
         if ($has('hr_admin')) {
