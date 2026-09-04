@@ -2,15 +2,19 @@
 
 declare(strict_types=1);
 
+use App\Interfaces\Http\Controllers\Api\V1\AssetApiController;
+use App\Interfaces\Http\Controllers\Api\V1\DocumentRequestApiController;
 use App\Interfaces\Http\Controllers\Api\V1\MobileMenuApiController;
 use App\Interfaces\Http\Controllers\Api\V1\NotificationApiController;
 use App\Modules\Access\Interfaces\Http\Controllers\Api\V1\TokenController;
 use App\Modules\Attendance\Interfaces\Http\Controllers\Api\V1\AttendanceApiController;
+use App\Modules\Helpdesk\Interfaces\Http\Controllers\Api\V1\HelpdeskApiController;
 use App\Modules\Izin\Interfaces\Http\Controllers\Api\V1\IzinApiController;
 use App\Modules\Leave\Interfaces\Http\Controllers\Api\V1\LeaveApiController;
 use App\Modules\Overtime\Interfaces\Http\Controllers\Api\V1\OvertimeApiController;
 use App\Modules\Payroll\Interfaces\Http\Controllers\Api\V1\PayslipApiController;
 use App\Modules\Sppd\Interfaces\Http\Controllers\Api\V1\SppdApiController;
+use App\Modules\Survey\Interfaces\Http\Controllers\Api\V1\SurveyApiController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -58,6 +62,25 @@ Route::prefix('v1')->group(function () {
         Route::post('/izin/{id}/batal', [IzinApiController::class, 'cancel']);
 
         Route::get('/slip-gaji', [PayslipApiController::class, 'index']);
+
+        // Aset Saya — Fase 2, BACA SAJA (cermin AssetAssignmentController::mine()).
+        Route::get('/aset', [AssetApiController::class, 'index']);
+
+        // Layanan Dokumen Mandiri — Fase 2, cermin DocumentRequestController.
+        Route::get('/dokumen', [DocumentRequestApiController::class, 'index']);
+        Route::post('/dokumen', [DocumentRequestApiController::class, 'store']);
+        Route::get('/dokumen/{id}/unduh', [DocumentRequestApiController::class, 'download']);
+
+        // HR Helpdesk — Fase 2, cermin HelpdeskController (SubmitTicket/ReplyTicket).
+        Route::get('/bantuan', [HelpdeskApiController::class, 'index']);
+        Route::post('/bantuan', [HelpdeskApiController::class, 'store']);
+        Route::get('/bantuan/{id}', [HelpdeskApiController::class, 'show']);
+        Route::post('/bantuan/{id}/balas', [HelpdeskApiController::class, 'reply']);
+
+        // Survei Keterlibatan — Fase 2, cermin SurveyController (SubmitSurveyResponse).
+        Route::get('/survei', [SurveyApiController::class, 'index']);
+        Route::get('/survei/{id}', [SurveyApiController::class, 'show']);
+        Route::post('/survei/{id}/isi', [SurveyApiController::class, 'submit']);
 
         Route::get('/notifikasi', [NotificationApiController::class, 'index']);
         Route::post('/notifikasi/{id}/baca', [NotificationApiController::class, 'markAsRead']);

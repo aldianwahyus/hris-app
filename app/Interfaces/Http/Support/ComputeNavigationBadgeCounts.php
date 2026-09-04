@@ -17,9 +17,11 @@ use App\Interfaces\Http\Controllers\OffboardingQueueController;
 use App\Interfaces\Http\Controllers\OutsideAttendanceApprovalController;
 use App\Interfaces\Http\Controllers\OvertimeDisbursementController;
 use App\Interfaces\Http\Controllers\PayrollApprovalController;
+use App\Interfaces\Http\Controllers\PrivacyRequestQueueController;
 use App\Interfaces\Http\Controllers\ShiftSwapApprovalController;
 use App\Interfaces\Http\Controllers\SppdApprovalController;
 use App\Interfaces\Http\Controllers\SppdDisbursementController;
+use App\Interfaces\Http\Controllers\WhistleblowingQueueController;
 use App\Modules\Access\Contracts\CurrentActor;
 use Closure;
 use Throwable;
@@ -75,6 +77,8 @@ final class ComputeNavigationBadgeCounts
             $counts['admin.sppd-disbursement-queue'] = $this->safeCount(fn () => app(SppdDisbursementController::class)->pendingCountHc());
             $counts['admin.bekal-cuti-queue'] = $this->safeCount(fn () => app(BekalCutiDisbursementController::class)->pendingCountHc());
             $counts['admin.recruitment-requisition-index'] = $this->safeCount(fn () => app(JobRequisitionController::class)->pendingCount());
+            $counts['admin.privacy-request-queue'] = $this->safeCount(fn () => app(PrivacyRequestQueueController::class)->pendingCount());
+            $counts['admin.whistleblowing-queue'] = $this->safeCount(fn () => app(WhistleblowingQueueController::class)->pendingCount());
         }
 
         if ($has('hr_admin', 'hr_approver')) {

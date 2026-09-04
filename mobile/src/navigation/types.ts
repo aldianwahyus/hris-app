@@ -18,4 +18,22 @@ export type MainStackParamList = {
   SlipGaji: undefined;
   Notifikasi: undefined;
   Izin: undefined;
+  AsetSaya: undefined;
+  AjukanDokumen: undefined;
+  TiketBantuan: undefined;
+  TiketBantuanDetail: { id: string };
+  Survei: undefined;
+  SurveiIsi: { id: string };
 };
+
+/**
+ * Subset dari MainStackParamList yang TIDAK butuh params — dipakai
+ * tempat layar dituju lewat variabel generik (mis. QUICK_ACTIONS di
+ * HomeScreen, MENU di LainnyaScreen), supaya navigate() tetap type-safe
+ * tanpa memaksa SETIAP pemanggil generik menyediakan params untuk layar
+ * yang butuh (TiketBantuanDetail/SurveiIsi HANYA dituju dengan params
+ * eksplisit dari layar sumbernya masing-masing, bukan lewat daftar ini).
+ */
+export type ParamlessMainStackRoute = {
+  [K in keyof MainStackParamList]: MainStackParamList[K] extends undefined ? K : never;
+}[keyof MainStackParamList];

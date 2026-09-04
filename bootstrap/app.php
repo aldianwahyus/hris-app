@@ -1,6 +1,8 @@
 <?php
 
+use App\Console\Commands\BackupDatabase;
 use App\Console\Commands\CheckExpiringContracts;
+use App\Console\Commands\CheckSystemHealth;
 use App\Console\Commands\ProcessSlaReminders;
 use App\Console\Commands\SyncAttendanceDevice;
 use App\Interfaces\Http\Middleware\PreventBackHistoryCache;
@@ -80,6 +82,22 @@ return Application::configure(basePath: dirname(__DIR__))
         // berakhir (evaluasi PM/client 2026-09-02).
         $schedule->command(CheckExpiringContracts::class)
             ->dailyAt('07:15')
+            ->withoutOverlapping()
+            ->onOneServer();
+
+        // Backup Basis Data Otomatis — Fase 2 (evaluasi PM/client
+        // 2026-09-03). 02:00 dipilih SENGAJA — jam paling sepi trafik,
+        // meminimalkan dampak beban pg_dump terhadap pengguna aktif.
+        $schedule->command(BackupDatabase::class)
+            ->dailyAt('02:00')
+            ->withoutOverlapping()
+            ->onOneServer();
+
+        // Dashboard Kesehatan Sistem — Fase 2 (evaluasi PM/client
+        // 2026-09-03). 5 menit cukup dekat waktu nyata tanpa membebani
+        // komponen yang diperiksa dengan permintaan terus-menerus.
+        $schedule->command(CheckSystemHealth::class)
+            ->everyFiveMinutes()
             ->withoutOverlapping()
             ->onOneServer();
     })

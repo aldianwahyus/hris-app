@@ -74,6 +74,7 @@
       <strong>{{ date('j M Y, H:i', strtotime($iw->scheduled_at)) }}</strong> — {{ $iw->location_or_link }}
       @if ($iw->interviewer_name) &middot; Pewawancara: {{ $iw->interviewer_name }} @endif
       <br>Status: {{ ['dijadwalkan' => 'Dijadwalkan', 'selesai' => 'Selesai', 'dibatalkan' => 'Dibatalkan'][$iw->status] ?? $iw->status }}
+      &middot; <a href="{{ route('admin.recruitment-application-interview-ics', [$application->id, $iw->id]) }}">Unduh Kalender (.ics)</a>
       @if ($iw->feedback)
         <div style="margin-top:6px;font-style:italic">"{{ $iw->feedback }}"{{ $iw->rating ? ' — Rating: '.$iw->rating.'/5' : '' }}</div>
       @elseif ($iw->status === 'dijadwalkan')

@@ -11,9 +11,11 @@ use App\Modules\Recruitment\Application\ScheduleInterview;
 use App\Modules\Recruitment\Application\UpdateApplicationStage;
 use App\Shared\Audit\Domain\AuditActor;
 use DateTimeImmutable;
+use DateTimeZone;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -157,6 +159,56 @@ final class ApplicationPipelineController extends Controller
         }
 
         return redirect()->route('admin.recruitment-application-show', $id)->with('sukses', 'Hasil wawancara tersimpan.');
+    }
+
+    /**
+     * Unduh jadwal wawancara sebagai berkas .ics — PHP murni (TIDAK
+     * ada API Google/Outlook, tidak butuh kredensial eksternal),
+     * diimpor manual oleh kandidat/pewawancara ke kalender masing-masing.
+     */
+    public function downloadInterviewIcs(string $id, string $interviewId): Response
+    {
+        $application = $this->findApplication($id);
+
+        $interview = DB::table('rec_interview_schedules')
+            ->where('id', $interviewId)
+            ->where('application_id', $id)
+            ->first();
+
+        abort_if($interview === null, 404);
+
+        $start = new DateTimeImmutable($interview->scheduled_at);
+        $end = $start->modify('+1 hour');
+        $now = new DateTimeImmutable;
+
+        $summary = "Wawancara — {$application->full_name} ({$application->posting_title})";
+
+        $lines = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:-//Bank NTB Syariah//HCIS//ID',
+            'CALSCALE:GREGORIAN',
+            'BEGIN:VEVENT',
+            'UID:'.$interview->id.'@hcis.bankntbsyariah',
+            'DTSTAMP:'.$now->setTimezone(new DateTimeZone('UTC'))->format('Ymd\THis\Z'),
+            'DTSTART:'.$start->setTimezone(new DateTimeZone('UTC'))->format('Ymd\THis\Z'),
+            'DTEND:'.$end->setTimezone(new DateTimeZone('UTC'))->format('Ymd\THis\Z'),
+            'SUMMARY:'.$this->escapeIcsText($summary),
+            'LOCATION:'.$this->escapeIcsText($interview->location_or_link),
+            'DESCRIPTION:'.$this->escapeIcsText("Wawancara kandidat untuk lowongan {$application->posting_title}."),
+            'END:VEVENT',
+            'END:VCALENDAR',
+        ];
+
+        return response(implode("\r\n", $lines)."\r\n", 200, [
+            'Content-Type' => 'text/calendar; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="wawancara-'.$interview->id.'.ics"',
+        ]);
+    }
+
+    private function escapeIcsText(string $value): string
+    {
+        return str_replace(['\\', "\n", ',', ';'], ['\\\\', '\\n', '\\,', '\\;'], $value);
     }
 
     public function convertToEmployee(Request $request, string $id): RedirectResponse

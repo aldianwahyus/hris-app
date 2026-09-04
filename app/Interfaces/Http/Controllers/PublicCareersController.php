@@ -73,7 +73,7 @@ final class PublicCareersController extends Controller
         }
 
         try {
-            $this->submitApplication->handle(
+            $statusToken = $this->submitApplication->handle(
                 postingId: $id,
                 fullName: $validated['full_name'],
                 email: $validated['email'],
@@ -84,7 +84,21 @@ final class PublicCareersController extends Controller
             return back()->withInput()->with('gagal', $e->getMessage());
         }
 
-        return view('careers.apply-success');
+        return view('careers.apply-success', ['statusToken' => $statusToken]);
+    }
+
+    public function statusPage(string $token): View
+    {
+        $application = DB::table('rec_applications as a')
+            ->join('rec_candidates as c', 'c.id', '=', 'a.candidate_id')
+            ->join('rec_job_postings as jp', 'jp.id', '=', 'a.posting_id')
+            ->where('a.status_token', $token)
+            ->select('a.status', 'a.applied_at', 'c.full_name', 'jp.title as posting_title')
+            ->first();
+
+        abort_if($application === null, 404, 'Tautan status lamaran tidak valid.');
+
+        return view('careers.status', ['application' => $application]);
     }
 
     public function offerForm(string $token): View

@@ -7,7 +7,7 @@ interface Option {
 }
 
 interface Props {
-  label: string;
+  label?: string;
   options: Option[];
   value: string | null;
   onChange: (value: string) => void;
@@ -17,7 +17,7 @@ interface Props {
 export function SelectChips({ label, options, value, onChange, clearable }: Props) {
   return (
     <View style={styles.wrap}>
-      <Text style={styles.label}>{label}</Text>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       <View style={styles.row}>
         {options.map((option) => {
           const active = value === option.value;

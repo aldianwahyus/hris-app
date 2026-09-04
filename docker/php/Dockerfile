@@ -22,6 +22,7 @@ RUN apk add --no-cache --virtual .build-deps \
         libpng \
         freetype \
         libjpeg-turbo \
+        postgresql-client \
     && docker-php-ext-configure intl \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j"$(nproc)" \
@@ -44,6 +45,9 @@ RUN apk add --no-cache --virtual .build-deps \
 # - sockets: pendukung Horizon/Redis
 # - gd     : generate gambar captcha login (mews/captcha) — hasil GD dipilih di
 #            config/captcha.php agar tidak butuh Imagick, ekstensi ini yang minimal
+# - postgresql-client : biner pg_dump — Backup Basis Data Otomatis (Fase 2,
+#            app/Console/Commands/BackupDatabase.php). libpq saja (di atas)
+#            cukup untuk ekstensi PHP pdo_pgsql, TIDAK menyertakan biner CLI ini.
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 

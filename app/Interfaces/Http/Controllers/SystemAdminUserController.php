@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Interfaces\Http\Controllers;
 
 use App\Models\User;
+use App\Modules\Access\Application\SetupTwoFactor;
 use App\Modules\Access\Contracts\CurrentActor;
 use App\Modules\Access\Domain\Role;
 use App\Modules\Access\Domain\SegregationOfDutyPolicy;
@@ -43,6 +44,7 @@ final class SystemAdminUserController extends Controller
     public function __construct(
         private readonly CurrentActor $actor,
         private readonly AuditRepository $auditRepository,
+        private readonly SetupTwoFactor $twoFactor,
     ) {}
 
     public function index(): View
@@ -81,6 +83,24 @@ final class SystemAdminUserController extends Controller
             ->route('sysadmin.users.index')
             ->with('kata_sandi_baru', $newPassword)
             ->with('kata_sandi_untuk', $user->name);
+    }
+
+    /**
+     * 2FA (Fase 2) — SYSADMIN membuka kunci akun yang kehilangan
+     * perangkat authenticator DAN kehabisan kode pemulihan. Mengosongkan
+     * kolom 2FA sepenuhnya — pengguna akan diminta setup ulang dari nol
+     * pada login berikutnya (bila perannya termasuk yang diwajibkan).
+     */
+    public function resetTwoFactor(Request $request, User $user): RedirectResponse
+    {
+        $this->twoFactor->reset($user, new AuditActor(
+            actorId: $this->actor->employeeId(),
+            actorRole: implode(',', $this->actor->roles()),
+            ipAddress: $request->ip(),
+            userAgent: $request->userAgent(),
+        ));
+
+        return redirect()->route('sysadmin.users.index')->with('sukses', "2FA untuk {$user->name} telah direset.");
     }
 
     public function assignRole(Request $request, User $user): RedirectResponse

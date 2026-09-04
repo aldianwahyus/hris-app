@@ -17,7 +17,7 @@
 </head>
 <body>
   <div class="kop">
-    <img src="{{ \App\Interfaces\Http\Support\CompanyLogo::dataUri() }}" alt="Bank NTB Syariah">
+    <img src="{{ \App\Interfaces\Http\Support\CompanyProfile::logoDataUri() }}" alt="Bank NTB Syariah">
   </div>
 
   <div class="judul">LAMPIRAN PENERIMA UANG LEMBUR</div>

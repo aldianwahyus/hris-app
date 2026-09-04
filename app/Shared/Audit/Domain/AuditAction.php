@@ -45,6 +45,10 @@ enum AuditAction: string
     // Tanda Tangan Elektronik (internal) — lihat App\Shared\Signature.
     case Signed = 'signed';
 
+    // 2FA (TOTP) — Fase 2, lihat App\Modules\Access\Application\SetupTwoFactor.
+    case TwoFactorEnabled = 'two_factor_enabled';
+    case TwoFactorReset = 'two_factor_reset';
+
     /**
      * Tindakan yang berdampak finansial atau menyangkut hak pegawai.
      * Wajib mencantumkan dasar (context_ref) — mis. nomor SPKL atau SK.

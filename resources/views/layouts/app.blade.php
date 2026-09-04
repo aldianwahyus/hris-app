@@ -383,6 +383,23 @@ a{color:inherit;text-decoration:none}
           </details>
         @endif
 
+        @if ($bukanAdminSistem || $u->can('whistleblowing.manage'))
+          <details class="grup" open>
+            <summary class="label">Pengaduan</summary>
+            @if ($bukanAdminSistem)
+              <a href="{{ route('whistleblowing.index') }}" class="{{ $cocok('whistleblowing.*') }}">
+                <span class="ic">⚑</span> Pengaduan
+              </a>
+            @endif
+            @can('whistleblowing.manage')
+              <a href="{{ route('admin.whistleblowing-queue') }}" class="{{ $cocok('admin.whistleblowing-*') }}">
+                <span class="ic">⚑</span> Whistleblowing
+                @isset($badgeCounts['admin.whistleblowing-queue'])<span class="lencana">{{ $badgeCounts['admin.whistleblowing-queue'] }}</span>@endisset
+              </a>
+            @endcan
+          </details>
+        @endif
+
         @if ($bukanAdminSistem || $u->can('survey.manage'))
           <details class="grup" open>
             <summary class="label">Survei</summary>
@@ -446,6 +463,11 @@ a{color:inherit;text-decoration:none}
                 <span class="ic">Σ</span> Rekap Penghasilan
               </a>
             @endcan
+            @can('report-builder.manage')
+              <a href="{{ route('hr.report-builder.index') }}" class="{{ $cocok('hr.report-builder.*') }}">
+                <span class="ic">▥</span> Report Builder
+              </a>
+            @endcan
           </details>
         @endif
 
@@ -499,10 +521,27 @@ a{color:inherit;text-decoration:none}
               <a href="{{ route('ess.cv') }}" class="{{ $cocok('ess.cv*') }}">
                 <span class="ic">☰</span> CV Saya
               </a>
+              <a href="{{ route('security-settings.index') }}" class="{{ $cocok('security-settings.*') }}">
+                <span class="ic">◷</span> Sesi Aktif Saya
+              </a>
+              <a href="{{ route('privacy.index') }}" class="{{ $cocok('privacy.*') }}">
+                <span class="ic">⚿</span> Privasi Data Saya
+              </a>
             @endif
+            @can('privacy-request.manage')
+              <a href="{{ route('admin.privacy-request-queue') }}" class="{{ $cocok('admin.privacy-request-*') }}">
+                <span class="ic">⚿</span> Permintaan Privasi Data
+                @isset($badgeCounts['admin.privacy-request-queue'])<span class="lencana">{{ $badgeCounts['admin.privacy-request-queue'] }}</span>@endisset
+              </a>
+            @endcan
             @can('hc-dashboard.view')
               <a href="{{ route('hc.dashboard') }}" class="{{ $cocok('hc.dashboard') }}">
                 <span class="ic">▦</span> Dashboard HC
+              </a>
+            @endcan
+            @can('workforce-analytics.view')
+              <a href="{{ route('hc.workforce-analytics') }}" class="{{ $cocok('hc.workforce-analytics') }}">
+                <span class="ic">◪</span> Analitik Tenaga Kerja
               </a>
             @endcan
             @can('branch-dashboard.view')
@@ -601,6 +640,23 @@ a{color:inherit;text-decoration:none}
                 <span class="ic">?</span> Peta Peran
               </a>
             @endif
+            {{-- Manajemen Sesi (Fase 2) TETAP hardcode system_admin SAJA
+                 (BUKAN hr_approver) — pola SAMA reset-kata-sandi/reset-2FA,
+                 sama persis middleware rutenya. --}}
+            @if ($u->hasRole('system_admin'))
+              <a href="{{ route('sysadmin.sessions.index') }}" class="{{ $cocok('sysadmin.sessions.*') }}">
+                <span class="ic">◷</span> Manajemen Sesi
+              </a>
+              <a href="{{ route('sysadmin.system-health.index') }}" class="{{ $cocok('sysadmin.system-health.*') }}">
+                <span class="ic">⚕</span> Kesehatan Sistem
+              </a>
+              {{-- Admin Sistem tidak melewati grup Kepegawaian (lihat
+                   $bukanAdminSistem) — "Sesi Aktif Saya" miliknya sendiri
+                   ditaruh di sini supaya tetap terjangkau. --}}
+              <a href="{{ route('security-settings.index') }}" class="{{ $cocok('security-settings.*') }}">
+                <span class="ic">◷</span> Sesi Aktif Saya
+              </a>
+            @endif
             @can('org-chart.view')
               <a href="{{ route('org-chart.index') }}" class="{{ $cocok('org-chart.*') }}">
                 <span class="ic">⌂</span> Struktur Organisasi
@@ -633,6 +689,9 @@ a{color:inherit;text-decoration:none}
               </a>
               <a href="{{ route('sysadmin.mobile-menu.index') }}" class="{{ $cocok('sysadmin.mobile-menu.*') }}">
                 <span class="ic">▦</span> Menu Aplikasi Mobile
+              </a>
+              <a href="{{ route('sysadmin.company-settings.index') }}" class="{{ $cocok('sysadmin.company-settings.*') }}">
+                <span class="ic">⚙</span> Pengaturan Perusahaan
               </a>
             @endcan
             @can('asset.manage')

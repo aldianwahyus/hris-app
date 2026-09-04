@@ -33,7 +33,7 @@
 @endphp
 
 <div class="kop">
-  <img src="{{ \App\Interfaces\Http\Support\CompanyLogo::dataUri() }}" alt="Bank NTB Syariah" style="height:34px;float:right">
+  <img src="{{ \App\Interfaces\Http\Support\CompanyProfile::logoDataUri() }}" alt="Bank NTB Syariah" style="height:34px;float:right">
   <p>KANTOR PUSAT{{ $headOfficeAddress ? ' : '.$headOfficeAddress : '' }}</p>
 </div>
 

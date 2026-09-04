@@ -10,14 +10,14 @@ import { NotificationListResponse } from '../api/types';
 import { Card } from '../components/Card';
 import { useAuth } from '../context/AuthContext';
 import { MobileMenuKey, useMobileMenu } from '../context/MobileMenuContext';
-import { MainStackParamList, MainTabParamList } from '../navigation/types';
+import { MainStackParamList, MainTabParamList, ParamlessMainStackRoute } from '../navigation/types';
 import { colors, radius, spacing, type } from '../theme';
 
 type QuickAction = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   tab?: keyof MainTabParamList;
-  stack?: keyof MainStackParamList;
+  stack?: ParamlessMainStackRoute;
   // undefined = selalu tampil (mis. "Lainnya", bukan menu fitur yang bisa dimatikan admin).
   menuKey?: MobileMenuKey;
 };

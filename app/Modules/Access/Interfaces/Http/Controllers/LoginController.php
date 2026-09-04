@@ -6,6 +6,7 @@ namespace App\Modules\Access\Interfaces\Http\Controllers;
 
 use App\Models\User;
 use App\Modules\Access\Application\AuthenticateEmployee;
+use App\Modules\Access\Application\FinalizeLogin;
 use App\Modules\Access\Interfaces\Http\Requests\LoginRequest;
 use App\Modules\Employee\Contracts\EmployeeRepository;
 use App\Shared\Audit\Domain\AuditAction;
@@ -14,7 +15,6 @@ use App\Shared\Audit\Domain\AuditEntry;
 use App\Shared\Audit\Domain\AuditRepository;
 use DateTimeImmutable;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -25,6 +25,9 @@ use Illuminate\View\View;
  */
 final class LoginController
 {
+    /** Peran pemegang permission sensitif — 2FA WAJIB, bukan opsional. Fase 2. */
+    private const ROLES_REQUIRING_TWO_FACTOR = ['hr_admin', 'hr_approver', 'system_admin'];
+
     public function __construct(
         private readonly EmployeeRepository $employees,
         private readonly AuditRepository $audit,
@@ -35,7 +38,7 @@ final class LoginController
         return view('auth.login');
     }
 
-    public function store(LoginRequest $request, AuthenticateEmployee $auth): RedirectResponse
+    public function store(LoginRequest $request, AuthenticateEmployee $auth, FinalizeLogin $finalize): RedirectResponse
     {
         $request->ensureIsNotRateLimited();
 
@@ -53,36 +56,29 @@ final class LoginController
 
         $request->clearAttempts();
 
-        Auth::login($user, $request->boolean('ingat'));
-        $request->session()->regenerate();
+        // 2FA (Fase 2) — kredensial benar TAPI sesi BELUM penuh sampai
+        // tantangan kode terlewati (atau setup wajib dituntaskan bila
+        // peran ini belum pernah mengaktifkan 2FA). $request->session()
+        // di-regenerate DI SINI JUGA (bukan hanya di FinalizeLogin) untuk
+        // mencegah fiksasi sesi selama status login "menggantung" ini.
+        if ($user->two_factor_confirmed_at !== null || $this->requiresTwoFactorSetup($user)) {
+            $request->session()->regenerate();
+            $request->session()->put('2fa_pending_user_id', $user->id);
+            $request->session()->put('2fa_remember', $request->boolean('ingat'));
 
-        $this->recordSuccessfulLogin($request, $user);
+            $route = $user->two_factor_confirmed_at !== null ? 'two-factor.challenge' : 'two-factor.setup';
 
-        // Admin Sistem bukan pegawai SDM sungguhan (lihat Role::SystemAdmin)
-        // — beranda pegawai tidak relevan baginya.
-        $landing = $user->hasRole('system_admin') ? 'sysadmin.users.index' : 'ess.dashboard';
-
-        return redirect()->intended(route($landing));
-    }
-
-    private function recordSuccessfulLogin(LoginRequest $request, User $user): void
-    {
-        if ($user->employee_id === null) {
-            return;
+            return redirect()->route($route);
         }
 
-        $this->audit->append(new AuditEntry(
-            occurredAt: new DateTimeImmutable,
-            actor: new AuditActor(
-                actorId: $user->employee_id,
-                actorRole: implode(',', $user->getRoleNames()->all()),
-                ipAddress: $request->ip(),
-                userAgent: $request->userAgent(),
-            ),
-            auditableType: 'user_account',
-            auditableId: $user->employee_id,
-            action: AuditAction::LoginSucceeded,
-        ));
+        $finalize->handle($request, $user, $request->boolean('ingat'));
+
+        return redirect()->intended(route($finalize->landingRoute($user)));
+    }
+
+    private function requiresTwoFactorSetup(User $user): bool
+    {
+        return $user->hasAnyRole(self::ROLES_REQUIRING_TWO_FACTOR);
     }
 
     /**

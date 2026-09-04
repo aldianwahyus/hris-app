@@ -8,6 +8,7 @@ use App\Core\Domain\Uuid7;
 use DateTimeImmutable;
 use DomainException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Melamar satu lowongan — dipanggil dari halaman PUBLIK tanpa login
@@ -15,6 +16,10 @@ use Illuminate\Support\Facades\DB;
  * Kandidat dicari/dibuat berdasarkan email (UNIQUE) — pelamar yang
  * sama boleh melamar posisi BERBEDA, tapi tidak boleh melamar
  * posisi yang SAMA dua kali (UNIQUE posting_id+candidate_id).
+ *
+ * Mengembalikan `status_token` (Fase 2, BUKAN applicationId) — token
+ * portal status kandidat, pola SAMA `response_token` tawaran kerja,
+ * lihat PublicCareersController::statusPage().
  */
 final class SubmitApplication
 {
@@ -64,9 +69,11 @@ final class SubmitApplication
             }
 
             $applicationId = (string) Uuid7::generate();
+            $statusToken = Str::random(48);
 
             DB::table('rec_applications')->insert([
                 'id' => $applicationId,
+                'status_token' => $statusToken,
                 'posting_id' => $postingId,
                 'candidate_id' => $candidateId,
                 'status' => 'melamar',
@@ -75,7 +82,7 @@ final class SubmitApplication
                 'version' => 1,
             ]);
 
-            return $applicationId;
+            return $statusToken;
         });
     }
 }

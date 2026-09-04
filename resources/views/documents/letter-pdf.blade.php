@@ -26,7 +26,7 @@
 </head>
 <body>
   <div class="kop">
-    <img src="{{ \App\Interfaces\Http\Support\CompanyLogo::dataUri() }}" alt="Bank NTB Syariah">
+    <img src="{{ \App\Interfaces\Http\Support\CompanyProfile::logoDataUri() }}" alt="Bank NTB Syariah">
     <p>Kantor Pusat — Jl. Pejanggik No. 30 Mataram</p>
   </div>
 

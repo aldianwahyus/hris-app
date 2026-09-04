@@ -10,6 +10,13 @@
     Terima kasih atas minat Anda bergabung dengan Bank NTB Syariah. Tim rekrutmen kami akan
     meninjau lamaran Anda dan menghubungi Anda melalui email bila lolos ke tahap berikutnya.
   </p>
+  <div style="background:var(--latar);border-radius:8px;padding:14px 16px;margin-bottom:20px;text-align:left">
+    <p style="font-size:12px;font-weight:700;margin-bottom:6px">Simpan tautan ini untuk memeriksa status lamaran Anda:</p>
+    <a href="{{ route('careers.status', $statusToken) }}" style="font-size:12px;word-break:break-all">{{ route('careers.status', $statusToken) }}</a>
+    <p style="font-size:11px;color:var(--teks-lemah);margin-top:8px">
+      Tautan ini TIDAK dikirim ulang lewat email — simpan atau catat sekarang.
+    </p>
+  </div>
   <a href="{{ route('careers.index') }}" class="btn">Lihat Lowongan Lainnya</a>
 </div>
 @endsection

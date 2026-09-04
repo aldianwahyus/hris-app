@@ -57,7 +57,7 @@ tbody tr:last-child td{border-bottom:0}
   <table>
     <thead>
       <tr>
-        <th>Nama</th><th>NRP</th><th>Email</th><th>Peran</th><th>Tindakan</th>
+        <th>Nama</th><th>NRP</th><th>Email</th><th>Peran</th><th>2FA</th><th>Tindakan</th>
       </tr>
     </thead>
     <tbody>
@@ -84,12 +84,27 @@ tbody tr:last-child td{border-bottom:0}
             @endforelse
           </td>
           <td>
+            @if ($u->two_factor_confirmed_at)
+              <span class="peran-tag" style="background:var(--hijau-muda);color:var(--hijau-tua)">Aktif</span>
+            @else
+              <span style="color:var(--teks-lemah);font-size:11.5px">Nonaktif</span>
+            @endif
+          </td>
+          <td>
             <div class="tindakan-kolom">
               <form method="POST" action="{{ route('sysadmin.users.reset-password', $u->id) }}"
                 data-confirm="Reset kata sandi {{ $u->name }}? Kata sandi lama akan langsung tidak berlaku.">
                 @csrf
                 <button class="mini" type="submit">Reset Kata Sandi</button>
               </form>
+
+              @if ($u->two_factor_confirmed_at)
+                <form method="POST" action="{{ route('sysadmin.users.reset-two-factor', $u->id) }}"
+                  data-confirm="Reset 2FA {{ $u->name }}? Perangkat authenticator lama tidak lagi berlaku, akan diminta setup ulang.">
+                  @csrf
+                  <button class="mini" type="submit">Reset 2FA</button>
+                </form>
+              @endif
 
               @if ($diriSendiri)
                 <span class="diri-sendiri">Akun Anda sendiri — peran tidak dapat diubah di sini</span>

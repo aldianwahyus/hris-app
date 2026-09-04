@@ -30,7 +30,7 @@
 </head>
 <body>
   <div class="kop">
-    <img src="{{ \App\Interfaces\Http\Support\CompanyLogo::dataUri() }}" alt="Bank NTB Syariah">
+    <img src="{{ \App\Interfaces\Http\Support\CompanyProfile::logoDataUri() }}" alt="Bank NTB Syariah">
   </div>
 
   <div class="judul">{{ $batch->payer_scope === 'hc' ? 'KANTOR PUSAT' : ($batch->office_name ?? 'KANTOR CABANG') }}</div>
@@ -39,7 +39,7 @@
   <table class="kepada">
     <tr>
       <td class="lbl">KEPADA YTH</td>
-      <td>: {{ $batch->payer_scope === 'hc' ? 'PT. BANK NTB SYARIAH KANTOR PUSAT' : $batch->office_name }}</td>
+      <td>: {{ $batch->payer_scope === 'hc' ? \App\Interfaces\Http\Support\CompanyProfile::name().' KANTOR PUSAT' : $batch->office_name }}</td>
       <td class="lbl" style="text-align:right;width:130px">Nomor Transaksi</td>
       <td style="width:150px">: {{ $batch->batch_number }}</td>
     </tr>
@@ -94,7 +94,7 @@
   <p class="coret">*) Coret salah satu</p>
 
   <div class="footer">
-    <span>PT. BANK NTB</span>
+    <span>{{ \App\Interfaces\Http\Support\CompanyProfile::name() }}</span>
     <b>{{ $batch->payer_scope === 'hc' ? 'KANTOR PUSAT' : $batch->office_name }}</b>
   </div>
 </body>

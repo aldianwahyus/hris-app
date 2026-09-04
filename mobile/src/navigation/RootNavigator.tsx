@@ -32,6 +32,12 @@ import { SppdScreen } from '../screens/SppdScreen';
 import { PayslipScreen } from '../screens/PayslipScreen';
 import { NotificationScreen } from '../screens/NotificationScreen';
 import { IzinScreen } from '../screens/IzinScreen';
+import { AsetSayaScreen } from '../screens/AsetSayaScreen';
+import { AjukanDokumenScreen } from '../screens/AjukanDokumenScreen';
+import { TiketBantuanScreen } from '../screens/TiketBantuanScreen';
+import { TiketBantuanDetailScreen } from '../screens/TiketBantuanDetailScreen';
+import { SurveiScreen } from '../screens/SurveiScreen';
+import { SurveiIsiScreen } from '../screens/SurveiIsiScreen';
 import { LainnyaScreen } from '../screens/LainnyaScreen';
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -103,6 +109,12 @@ function MainNavigator() {
       <MainStack.Screen name="SlipGaji" component={PayslipScreen} options={{ animation: 'slide_from_right' }} />
       <MainStack.Screen name="Notifikasi" component={NotificationScreen} options={{ animation: 'slide_from_right' }} />
       <MainStack.Screen name="Izin" component={IzinScreen} options={{ animation: 'slide_from_right' }} />
+      <MainStack.Screen name="AsetSaya" component={AsetSayaScreen} options={{ animation: 'slide_from_right' }} />
+      <MainStack.Screen name="AjukanDokumen" component={AjukanDokumenScreen} options={{ animation: 'slide_from_right' }} />
+      <MainStack.Screen name="TiketBantuan" component={TiketBantuanScreen} options={{ animation: 'slide_from_right' }} />
+      <MainStack.Screen name="TiketBantuanDetail" component={TiketBantuanDetailScreen} options={{ animation: 'slide_from_right' }} />
+      <MainStack.Screen name="Survei" component={SurveiScreen} options={{ animation: 'slide_from_right' }} />
+      <MainStack.Screen name="SurveiIsi" component={SurveiIsiScreen} options={{ animation: 'slide_from_right' }} />
     </MainStack.Navigator>
   );
 }

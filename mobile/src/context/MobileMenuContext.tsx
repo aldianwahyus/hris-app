@@ -4,7 +4,18 @@ import { apiClient } from '../api/client';
 import { MobileMenuConfigResponse } from '../api/types';
 import { useAuth } from './AuthContext';
 
-export type MobileMenuKey = 'absensi' | 'cuti' | 'lembur' | 'sppd' | 'izin' | 'slip_gaji' | 'notifikasi';
+export type MobileMenuKey =
+  | 'absensi'
+  | 'cuti'
+  | 'lembur'
+  | 'sppd'
+  | 'izin'
+  | 'slip_gaji'
+  | 'notifikasi'
+  | 'aset'
+  | 'dokumen'
+  | 'helpdesk'
+  | 'survei';
 
 interface MobileMenuContextValue {
   isEnabled: (key: MobileMenuKey) => boolean;

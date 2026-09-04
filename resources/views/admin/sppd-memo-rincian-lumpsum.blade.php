@@ -45,7 +45,7 @@
 @endphp
 
 <div class="kop">
-  <img src="{{ \App\Interfaces\Http\Support\CompanyLogo::dataUri() }}" alt="Bank NTB Syariah">
+  <img src="{{ \App\Interfaces\Http\Support\CompanyProfile::logoDataUri() }}" alt="Bank NTB Syariah">
   <h1>Lampiran Surat Perintah Perjalanan Dinas (SPPD)</h1>
   <div class="nomor">
     <span>Nomor : {{ $traveler->request_number }}</span>

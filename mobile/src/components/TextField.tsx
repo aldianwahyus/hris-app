@@ -2,13 +2,13 @@ import { StyleSheet, Text, TextInput, TextInputProps, View } from 'react-native'
 import { colors, radius, spacing, type } from '../theme';
 
 interface Props extends TextInputProps {
-  label: string;
+  label?: string;
 }
 
 export function TextField({ label, style, ...props }: Props) {
   return (
     <View style={styles.wrap}>
-      <Text style={styles.label}>{label}</Text>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       <TextInput style={[styles.input, style]} placeholderTextColor={colors.textMuted} {...props} />
     </View>
   );

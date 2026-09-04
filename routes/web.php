@@ -12,6 +12,7 @@ use App\Interfaces\Http\Controllers\AttendanceRecapController;
 use App\Interfaces\Http\Controllers\AuditLogController;
 use App\Interfaces\Http\Controllers\BekalCutiDisbursementController;
 use App\Interfaces\Http\Controllers\BranchDashboardController;
+use App\Interfaces\Http\Controllers\CompanySettingsController;
 use App\Interfaces\Http\Controllers\CompetencyController;
 use App\Interfaces\Http\Controllers\DashboardController;
 use App\Interfaces\Http\Controllers\DecisionLetterController;
@@ -74,9 +75,13 @@ use App\Interfaces\Http\Controllers\OvertimeDisbursementController;
 use App\Interfaces\Http\Controllers\OvertimeRecapController;
 use App\Interfaces\Http\Controllers\PayrollApprovalController;
 use App\Interfaces\Http\Controllers\PositionController;
+use App\Interfaces\Http\Controllers\PrivacyController;
+use App\Interfaces\Http\Controllers\PrivacyRequestQueueController;
 use App\Interfaces\Http\Controllers\PublicCareersController;
+use App\Interfaces\Http\Controllers\ReportBuilderController;
 use App\Interfaces\Http\Controllers\RoleFeatureMapController;
 use App\Interfaces\Http\Controllers\SalaryScaleController;
+use App\Interfaces\Http\Controllers\SecuritySettingsController;
 use App\Interfaces\Http\Controllers\ShiftAssignmentController;
 use App\Interfaces\Http\Controllers\ShiftPatternController;
 use App\Interfaces\Http\Controllers\ShiftSwapApprovalController;
@@ -90,12 +95,18 @@ use App\Interfaces\Http\Controllers\SuccessionPlanController;
 use App\Interfaces\Http\Controllers\SurveyAdminController;
 use App\Interfaces\Http\Controllers\SurveyController;
 use App\Interfaces\Http\Controllers\SystemAdminEmployeeController;
+use App\Interfaces\Http\Controllers\SystemAdminSessionController;
 use App\Interfaces\Http\Controllers\SystemAdminUserController;
+use App\Interfaces\Http\Controllers\SystemHealthController;
 use App\Interfaces\Http\Controllers\SystemParameterController;
 use App\Interfaces\Http\Controllers\TalentProfileController;
 use App\Interfaces\Http\Controllers\TrainingEvaluationController;
+use App\Interfaces\Http\Controllers\WhistleblowingController;
+use App\Interfaces\Http\Controllers\WhistleblowingQueueController;
+use App\Interfaces\Http\Controllers\WorkforceAnalyticsController;
 use App\Modules\Access\Interfaces\Http\Controllers\LoginController;
 use App\Modules\Access\Interfaces\Http\Controllers\LogoutController;
+use App\Modules\Access\Interfaces\Http\Controllers\TwoFactorController;
 use App\Modules\Attendance\Interfaces\Http\Controllers\AttendanceController;
 use App\Modules\Izin\Interfaces\Http\Controllers\IzinRequestController;
 use App\Modules\Leave\Interfaces\Http\Controllers\LeaveRequestController;
@@ -126,6 +137,18 @@ Route::middleware(['guest', 'throttle:30,1'])->group(function () {
     // sandi yang sudah diisi pengguna tidak hilang saat captcha diganti.
     Route::get('/captcha-refresh', fn () => response()->json(['captcha' => captcha_src('flat')]))
         ->name('captcha.refresh');
+
+    // 2FA (TOTP) — Fase 2 (evaluasi PM/client 2026-09-03). Dijangkau HANYA
+    // setelah LoginController::store() menaruh sesi "menggantung" — masih
+    // di bawah middleware 'guest' karena Auth::check() TETAP false sampai
+    // TwoFactorController::completeLogin()/confirmSetup() memanggil
+    // FinalizeLogin. Literal /setup WAJIB terdaftar sebelum route lain
+    // yang mirip agar tidak tertelan (tidak relevan di sini karena tidak
+    // ada wildcard, tapi konsisten dengan pola urutan rute proyek ini).
+    Route::get('/2fa/verifikasi', [TwoFactorController::class, 'showChallenge'])->name('two-factor.challenge');
+    Route::post('/2fa/verifikasi', [TwoFactorController::class, 'verifyChallenge'])->name('two-factor.challenge.verify');
+    Route::get('/2fa/setup', [TwoFactorController::class, 'showSetup'])->name('two-factor.setup');
+    Route::post('/2fa/setup', [TwoFactorController::class, 'confirmSetup'])->name('two-factor.setup.confirm');
 });
 
 Route::post('/keluar', LogoutController::class)->middleware('auth')->name('logout');
@@ -146,6 +169,10 @@ Route::middleware('throttle:30,1')->group(function () {
     });
     Route::get('/tawaran/{token}', [PublicCareersController::class, 'offerForm'])->name('careers.offer');
     Route::post('/tawaran/{token}', [PublicCareersController::class, 'respondToOffer'])->name('careers.offer-respond');
+
+    // Portal status kandidat (Fase 2) — PUBLIK, TANPA login, lihat
+    // SubmitApplication (status_token) + PublicCareersController::statusPage().
+    Route::get('/lowongan/status/{token}', [PublicCareersController::class, 'statusPage'])->name('careers.status');
 });
 
 // throttle:60,1 (1 permintaan/detik rata-rata) — jauh di atas kecepatan
@@ -206,6 +233,23 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
 
         Route::post('/penghargaan', [EmployeeAwardController::class, 'store'])->name('awards.store');
         Route::delete('/penghargaan/{id}', [EmployeeAwardController::class, 'destroy'])->name('awards.destroy');
+    });
+
+    // "Sesi Aktif Saya" (Fase 2) — lingkup SELF murni, TIDAK butuh
+    // permission (siapa pun yang login boleh kelola sesinya sendiri).
+    Route::prefix('keamanan-saya')->name('security-settings.')->group(function () {
+        Route::get('/', [SecuritySettingsController::class, 'index'])->name('index');
+        Route::post('/{id}/cabut', [SecuritySettingsController::class, 'revoke'])->name('revoke');
+        Route::post('/cabut-lainnya', [SecuritySettingsController::class, 'revokeOthers'])->name('revoke-others');
+    });
+
+    // "Privasi Data Saya" (UU PDP, Fase 2) — lingkup SELF murni, TIDAK
+    // butuh permission (siapa pun yang login boleh unduh/ajukan hapus
+    // datanya sendiri), lihat PrivacyController.
+    Route::prefix('privasi-saya')->name('privacy.')->group(function () {
+        Route::get('/', [PrivacyController::class, 'index'])->name('index');
+        Route::get('/unduh', [PrivacyController::class, 'exportData'])->name('export');
+        Route::post('/hapus', [PrivacyController::class, 'requestDeletion'])->name('request-deletion');
     });
 
     // Tahap 2 — Pengajuan dari Layar. Selalu atas nama pegawai yang
@@ -316,6 +360,16 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
         Route::get('/', [SurveyController::class, 'index'])->name('index');
         Route::get('/{id}', [SurveyController::class, 'fill'])->name('fill');
         Route::post('/{id}', [SurveyController::class, 'submit'])->name('submit');
+    });
+
+    // Whistleblowing/Pengaduan — modul baru (Fase 2), lingkup SELF
+    // murni (riwayat HANYA laporan non-anonim milik sendiri — laporan
+    // anonim SENGAJA tidak tertaut ke pegawai mana pun, lihat
+    // SubmitReport). Antrean penanganan ada di
+    // WhistleblowingQueueController (hr_approver saja).
+    Route::prefix('pengaduan')->name('whistleblowing.')->group(function () {
+        Route::get('/', [WhistleblowingController::class, 'index'])->name('index');
+        Route::post('/', [WhistleblowingController::class, 'store'])->name('store');
     });
 
     // Offboarding — modul baru (evaluasi PM/client 2026-09-02). HANYA
@@ -727,12 +781,48 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
         Route::post('/rekrutmen/lamaran/{id}/wawancara/{interviewId}/feedback', [ApplicationPipelineController::class, 'recordInterviewFeedback'])
             ->middleware('permission:recruitment.manage')
             ->name('recruitment-application-interview-feedback');
+        Route::get('/rekrutmen/lamaran/{id}/wawancara/{interviewId}/ics', [ApplicationPipelineController::class, 'downloadInterviewIcs'])
+            ->middleware('permission:recruitment.manage')
+            ->name('recruitment-application-interview-ics');
         Route::post('/rekrutmen/lamaran/{id}/tawaran', [JobOfferController::class, 'store'])
             ->middleware('permission:recruitment.manage')
             ->name('recruitment-application-offer');
         Route::post('/rekrutmen/lamaran/{id}/jadikan-pegawai', [ApplicationPipelineController::class, 'convertToEmployee'])
             ->middleware('permission:recruitment.manage')
             ->name('recruitment-application-convert');
+
+        // Perkakas Data Pribadi (UU PDP, Fase 2) — peninjauan permintaan
+        // penghapusan data, HANYA hr_approver (bank-wide, lihat migrasi
+        // permission privacy-request.manage).
+        Route::get('/privasi', [PrivacyRequestQueueController::class, 'index'])
+            ->middleware('permission:privacy-request.manage')
+            ->name('privacy-request-queue');
+        Route::post('/privasi/{id}/tinjau', [PrivacyRequestQueueController::class, 'review'])
+            ->middleware('permission:privacy-request.manage')
+            ->name('privacy-request-review');
+        Route::post('/privasi/{id}/tolak', [PrivacyRequestQueueController::class, 'reject'])
+            ->middleware('permission:privacy-request.manage')
+            ->name('privacy-request-reject');
+        Route::post('/privasi/{id}/tuntaskan', [PrivacyRequestQueueController::class, 'complete'])
+            ->middleware('permission:privacy-request.manage')
+            ->name('privacy-request-complete');
+
+        // Whistleblowing/Pengaduan — HANYA hr_approver (permission
+        // TERPISAH dari hr_admin, lihat migrasi permission
+        // whistleblowing.manage). Literal /buat tidak ada di sini
+        // (pengajuan murni ESS, lihat WhistleblowingController).
+        Route::get('/pengaduan', [WhistleblowingQueueController::class, 'index'])
+            ->middleware('permission:whistleblowing.manage')
+            ->name('whistleblowing-queue');
+        Route::get('/pengaduan/{id}', [WhistleblowingQueueController::class, 'show'])
+            ->middleware('permission:whistleblowing.manage')
+            ->name('whistleblowing-show');
+        Route::post('/pengaduan/{id}/proses', [WhistleblowingQueueController::class, 'startProcessing'])
+            ->middleware('permission:whistleblowing.manage')
+            ->name('whistleblowing-start-processing');
+        Route::post('/pengaduan/{id}/selesai', [WhistleblowingQueueController::class, 'complete'])
+            ->middleware('permission:whistleblowing.manage')
+            ->name('whistleblowing-complete');
 
         // Pelatihan — 1 TAHAP, Atasan Langsung SAJA (pola sama Tukar
         // Shift, tidak berdampak finansial langsung). Auditor hanya-baca.
@@ -1045,6 +1135,15 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
         ->middleware('permission:income-recap.view')
         ->name('hr.income-recap.export');
 
+    // Report Builder (Fase 2) — registry subjek (ReportSubjectRegistry),
+    // lingkup SAMA income-recap.view (hr_admin: kantornya sendiri,
+    // hr_approver: seluruh bank) — lihat ReportBuilderController.
+    Route::prefix('laporan')->name('hr.report-builder.')->middleware('permission:report-builder.manage')->group(function () {
+        Route::get('/', [ReportBuilderController::class, 'index'])->name('index');
+        Route::get('/{subjectKey}', [ReportBuilderController::class, 'show'])->name('show');
+        Route::get('/{subjectKey}/unduh', [ReportBuilderController::class, 'download'])->name('download');
+    });
+
     // Pembayaran Lembur MASSAL (Admin Cabang) — HANYA cabang/KCP
     // miliknya sendiri. Kantor pusat dibayar Admin HC lewat rute
     // admin.overtime-disbursement-queue di atas.
@@ -1094,6 +1193,12 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
         ->middleware('permission:hc-dashboard.view')
         ->name('hc.dashboard');
 
+    // Analitik Tenaga Kerja (Fase 2) — BERBASIS ATURAN, BUKAN machine
+    // learning, lihat WorkforceAnalyticsController.
+    Route::get('/analitik-tenaga-kerja', [WorkforceAnalyticsController::class, 'index'])
+        ->middleware('permission:workforce-analytics.view')
+        ->name('hc.workforce-analytics');
+
     // Record Pegawai — laporan rincian posisi terakhir per bulan, BANK_WIDE,
     // TANPA form input (murni dari SK Mutasi/Promosi yang disetujui).
     Route::get('/record-pegawai', [EmployeePositionRecordController::class, 'index'])
@@ -1116,6 +1221,21 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
     Route::prefix('admin/sistem')->name('sysadmin.')->middleware('role:system_admin')->group(function () {
         Route::post('/pengguna/{user}/reset-kata-sandi', [SystemAdminUserController::class, 'resetPassword'])
             ->name('users.reset-password');
+        // 2FA (Fase 2) — pola SAMA reset-kata-sandi di atas: kunci
+        // gerbang keamanan akun, TETAP hardcode system_admin, TIDAK
+        // ikut migrasi ke permission dinamis.
+        Route::post('/pengguna/{user}/reset-2fa', [SystemAdminUserController::class, 'resetTwoFactor'])
+            ->name('users.reset-two-factor');
+
+        // Manajemen Sesi Aktif (Fase 2) — kelas kewenangan SAMA baris di
+        // atas (lihat docblock SystemAdminSessionController).
+        Route::get('/sesi', [SystemAdminSessionController::class, 'index'])->name('sessions.index');
+        Route::post('/sesi/{id}/cabut', [SystemAdminSessionController::class, 'revoke'])->name('sessions.revoke');
+
+        // Dashboard Kesehatan Sistem (Fase 2) — hanya-baca, tapi tetap
+        // hardcode system_admin (menyingkap detail infrastruktur internal:
+        // versi/host DB, status Redis, isi log error mentah).
+        Route::get('/kesehatan-sistem', [SystemHealthController::class, 'index'])->name('system-health.index');
     });
 
     // 13 rute IT lain (parameter/skala gaji/tarif SPPD/geofence/impor
@@ -1235,6 +1355,11 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
         // (lihat MobileMenuSettingsController).
         Route::get('/menu-mobile', [MobileMenuSettingsController::class, 'index'])->name('mobile-menu.index');
         Route::post('/menu-mobile', [MobileMenuSettingsController::class, 'update'])->name('mobile-menu.update');
+
+        // Pengaturan Perusahaan (Fase 2) — nama+lambang dinamis, lihat
+        // CompanyProfile/CompanySettingsController.
+        Route::get('/pengaturan-perusahaan', [CompanySettingsController::class, 'index'])->name('company-settings.index');
+        Route::post('/pengaturan-perusahaan', [CompanySettingsController::class, 'update'])->name('company-settings.update');
     });
 
     // Manajemen Aset — permission TERPISAH dari sysadmin-content.manage

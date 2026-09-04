@@ -7,14 +7,18 @@ import { Card } from '../components/Card';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../context/AuthContext';
 import { MobileMenuKey, useMobileMenu } from '../context/MobileMenuContext';
-import { MainStackParamList } from '../navigation/types';
+import { MainStackParamList, ParamlessMainStackRoute } from '../navigation/types';
 import { colors, radius, spacing, type } from '../theme';
 
-const MENU: { icon: keyof typeof Ionicons.glyphMap; label: string; description: string; route: keyof MainStackParamList; menuKey: MobileMenuKey }[] = [
+const MENU: { icon: keyof typeof Ionicons.glyphMap; label: string; description: string; route: ParamlessMainStackRoute; menuKey: MobileMenuKey }[] = [
   { icon: 'airplane-outline', label: 'SPPD', description: 'Perjalanan dinas', route: 'Sppd', menuKey: 'sppd' },
   { icon: 'document-text-outline', label: 'Izin', description: 'Izin tidak masuk bekerja', route: 'Izin', menuKey: 'izin' },
   { icon: 'wallet-outline', label: 'Slip Gaji', description: 'Riwayat penghasilan', route: 'SlipGaji', menuKey: 'slip_gaji' },
   { icon: 'notifications-outline', label: 'Notifikasi', description: 'Pemberitahuan sistem', route: 'Notifikasi', menuKey: 'notifikasi' },
+  { icon: 'cube-outline', label: 'Aset Saya', description: 'Aset perusahaan yang Anda pegang', route: 'AsetSaya', menuKey: 'aset' },
+  { icon: 'reader-outline', label: 'Ajukan Dokumen', description: 'Surat keterangan kerja & sejenisnya', route: 'AjukanDokumen', menuKey: 'dokumen' },
+  { icon: 'help-buoy-outline', label: 'Tiket Bantuan', description: 'HR Helpdesk', route: 'TiketBantuan', menuKey: 'helpdesk' },
+  { icon: 'clipboard-outline', label: 'Survei', description: 'Survei keterlibatan pegawai', route: 'Survei', menuKey: 'survei' },
 ];
 
 export function LainnyaScreen() {

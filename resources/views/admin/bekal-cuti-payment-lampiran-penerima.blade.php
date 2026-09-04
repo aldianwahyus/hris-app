@@ -20,12 +20,12 @@
 </head>
 <body>
   <div class="kop">
-    <img src="{{ \App\Interfaces\Http\Support\CompanyLogo::dataUri() }}" alt="Bank NTB Syariah">
+    <img src="{{ \App\Interfaces\Http\Support\CompanyProfile::logoDataUri() }}" alt="Bank NTB Syariah">
   </div>
 
   <div class="judul">
     Daftar Pelimpahan Bekal Cuti Tahunan Tahun {{ $items->first()->year ?? \Carbon\Carbon::parse($batch->created_at)->year }}
-    Pegawai PT. Bank NTB — {{ $batch->payer_scope === 'hc' ? 'Kantor Pusat' : ($batch->office_name ?? 'Kantor Cabang') }}
+    Pegawai {{ \App\Interfaces\Http\Support\CompanyProfile::name() }} — {{ $batch->payer_scope === 'hc' ? 'Kantor Pusat' : ($batch->office_name ?? 'Kantor Cabang') }}
   </div>
 
   <table class="rincian">

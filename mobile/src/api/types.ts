@@ -151,6 +151,85 @@ export interface NotificationListResponse {
   unread_count: number;
 }
 
+// Aset Saya (Fase 2) — BACA SAJA, cermin AssetAssignmentController::mine().
+export interface AssetAssignmentRow {
+  asset_code: string;
+  name: string;
+  category: string;
+  brand_model: string | null;
+  serial_number: string | null;
+  assigned_at: string;
+}
+
+// Layanan Dokumen Mandiri (Fase 2) — status: pending | diproses | siap | ditolak.
+// TIDAK ada unduh PDF di mobile (pola SAMA Slip Gaji, lihat PayslipScreen) —
+// dokumen yang 'siap' diunduh lewat aplikasi web.
+export interface DocumentRequestRow {
+  id: string;
+  document_type: string;
+  purpose: string;
+  status: string;
+  decision_note: string | null;
+  created_at: string;
+  [key: string]: unknown;
+}
+
+// HR Helpdesk (Fase 2) — status: terbuka | diproses | selesai | ditutup.
+export interface HelpdeskTicketRow {
+  id: string;
+  ticket_number: string;
+  category: string;
+  subject: string;
+  description: string;
+  status: string;
+  priority: string;
+  assigned_to: string | null;
+  created_at: string;
+  [key: string]: unknown;
+}
+
+export interface HelpdeskReplyRow {
+  message: string;
+  created_at: string;
+  author_employee_id: string;
+  author_name: string;
+}
+
+export interface HelpdeskDetailResponse {
+  data: HelpdeskTicketRow;
+  replies: HelpdeskReplyRow[];
+}
+
+// Survei Keterlibatan (Fase 2) — eNPS/Pulse/Kustom.
+export interface SurveyRow {
+  id: string;
+  title: string;
+  description: string | null;
+  type: string;
+  is_anonymous: boolean;
+  start_date: string;
+  end_date: string;
+  [key: string]: unknown;
+}
+
+export interface SurveyListResponse {
+  data: SurveyRow[];
+  responded_ids: string[];
+}
+
+export interface SurveyQuestionRow {
+  id: string;
+  question_text: string;
+  question_type: 'nps_0_10' | 'rating_1_5' | 'pilihan_ganda' | 'teks';
+  options: string[];
+  display_order: number;
+}
+
+export interface SurveyDetailResponse {
+  data: SurveyRow;
+  questions: SurveyQuestionRow[];
+}
+
 // Menu Aplikasi Mobile yang boleh tampil — dikendalikan SYSADMIN/Admin HC
 // lewat halaman web (bank-wide, bukan per peran). Kunci di sini WAJIB
 // cocok persis dengan mobile_menu_items.key (lihat migrasi
